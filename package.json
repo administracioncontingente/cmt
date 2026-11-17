@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "node prisma/seed.mjs",
+    "import:real": "node scripts/import_real_data.mjs",
     "test:verify": "node scripts/verify.mjs"
   },
   "dependencies": {

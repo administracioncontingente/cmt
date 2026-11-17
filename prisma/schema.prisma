@@ -48,12 +48,22 @@ model InstallmentSchedule {
 model Participant {
   id                   String        @id @default(cuid())
   rut                  String        @unique
+  rutClean             String?       // RUT sin puntos ni guión para búsquedas rápidas
   firstName            String
-  lastName             String
+  lastName             String        // Primer Apellido
+  secondLastName       String?       // Segundo Apellido
   email                String
   phone                String?
   birthDate            DateTime?
-  gender               String?       // M, F, OTRO
+  gender               String?       // Masculino, Femenino, Otro
+  address              String?       // Dirección
+  commune              String?       // Comuna
+  city                 String?       // Ciudad
+  nationality          String?       // Nacionalidad
+  secondNationality    String?       // Segunda nacionalidad
+  idCardUrl            String?       // Enlace a imagen/Google Drive de la Cédula
+  previousEvents       String?       // Eventos mundiales/interamericanos anteriores
+
   dietaryRestrictions String?
   medicalNotes         String?
 
@@ -67,13 +77,43 @@ model Participant {
   scoutZone            String?
   scoutDistrict        String?
   scoutGroup           String?
+  scoutCurrentRole     String?       // Actualmente participando en (Guiadora, Dirigente, etc.)
+  scoutTrainingLevel   String?       // Nivel de Formación
+  scoutMemberNumber    String?       // N° de miembro activo
+  groupLeaderName      String?       // Nombre Contacto Dirigente a cargo del Grupo
+  groupLeaderEmail     String?       // Correo Contacto del Grupo
+  groupLeaderPhone     String?       // Teléfono Contacto del Grupo
+  activeRegistrations  String?       // Registro 2024, 2025, 2026, 2027
 
   // Datos en el Contingente Polonia 2027
-  contingentRole       String        @default("JOVEN") // JOVEN, DIRIGENTE, IST, CMT
-  status               String        @default("PRE_INSCRITO") // PRE_INSCRITO, CONFIRMADO, LISTA_ESPERA, RETIRADO
+  contingentRole       String        @default("Participante") // Participante, RESPONSABLE, IST, CMT, Responsable de Patrulla
+  status               String        @default("CONFIRMADO")   // CONFIRMADO, PRE_INSCRITO, LISTA_ESPERA, RETIRADO / BAJA
   unitOrPatrol         String?
 
-  // Plan Financiero y Pagos
+  // Asignaciones y Logística
+  cupoCode             String?       // COD CUPO (Ej: IST106, PAR042)
+  territorium          String?       // TERRITORIUM (Ej: SUR, NORTE, CENTRO)
+  unit                 String?       // UNIT
+  unitName             String?       // UNIT-NAME
+  patrol               String?       // PATRULLA
+  patrolName           String?       // PATROL-NAME
+  patrolCode           String?       // COD PATRULLA
+  uniformSize          String?       // TALLAS OK
+  polandRegistered     String?       // REGISTRO POLAND (Sí / No)
+
+  // Datos Financieros Oficiales del Sheet
+  feeType              String?       // TIPO CUOTA (A: Inscripción Inicial, B: Temprana, etc.)
+  feeEnrollmentType    String?       // TIPO INSCRIPCIÓN
+  calendarUrl          String?       // URL imagen calendario de pagos
+  totalPaidSheet       Float?        // CUOTA PAGADA según planilla
+  targetFeeUSD         Float?        // CUOTA FINAL oficial en USD
+  dueToDateUSD         Float?        // CUOTA A FECHA en USD
+  debtFinalUSD         Float?        // DEUDA FINAL en USD
+  debtToDateUSD        Float?        // DEUDA A FECHA en USD
+  overpaymentUSD       Float?        // SOBREPAGO CUOTA en USD
+  financialStatusSheet String?       // CUOTA AL DIA del Sheet ("Total Pagado", "Al Día", "Adeuda", "BAJA")
+
+  // Plan Financiero y Pagos Relacionados
   planId               String?
   plan                 PaymentPlan?  @relation(fields: [planId], references: [id], onDelete: SetNull)
   payments             Payment[]
@@ -84,16 +124,16 @@ model Participant {
 }
 
 model Payment {
-  id                   String      @id @default(cuid())
+  id                   String       @id @default(cuid())
   participantId        String
-  participant          Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  amount               Float       // In USD
-  paymentDate          DateTime    @default(now())
-  paymentMethod        String      @default("TRANSFERENCIA") // TRANSFERENCIA, TARJETA, EFECTIVO, OTRO
-  transactionReference String?     // N° de operación bancaria
+  participant          Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  amount               Float        // In USD
+  paymentDate          DateTime     @default(now())
+  paymentMethod        String       @default("TRANSFERENCIA") // TRANSFERENCIA, TARJETA, EFECTIVO, OTRO
+  transactionReference String?      // N° de operación / Documento bancario
   notes                String?
   registeredById       String?
-  registeredBy         User?       @relation(fields: [registeredById], references: [id], onDelete: SetNull)
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
+  registeredBy         User?        @relation(fields: [registeredById], references: [id], onDelete: SetNull)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 }

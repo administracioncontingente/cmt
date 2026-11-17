@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
-import { calculateFinancialSummary } from '@/lib/finance';
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -11,13 +10,21 @@ export async function GET() {
 
   try {
     const participants = await prisma.participant.findMany({
-      include: {
+      select: {
+        id: true,
+        contingentRole: true,
+        status: true,
+        targetFeeUSD: true,
+        totalPaidSheet: true,
+        debtFinalUSD: true,
+        debtToDateUSD: true,
+        financialStatusSheet: true,
         plan: {
-          include: {
-            installments: { orderBy: { installmentNumber: 'asc' } },
-          },
+          select: { totalAmount: true },
         },
-        payments: true,
+        payments: {
+          select: { amount: true },
+        },
       },
     });
 
@@ -29,46 +36,65 @@ export async function GET() {
     let countAlDia = 0;
     let countEnMora = 0;
     let countCompletado = 0;
+    let countBaja = 0;
 
-    const roleCounts = {
+    const roleCounts: Record<string, number> = {
       JOVEN: 0,
       DIRIGENTE: 0,
       IST: 0,
       CMT: 0,
     };
 
-    const statusCounts = {
-      PRE_INSCRITO: 0,
+    const statusCounts: Record<string, number> = {
       CONFIRMADO: 0,
+      PRE_INSCRITO: 0,
       LISTA_ESPERA: 0,
       RETIRADO: 0,
     };
 
     participants.forEach((p) => {
-      // Role
-      if (p.contingentRole in roleCounts) {
-        roleCounts[p.contingentRole as keyof typeof roleCounts]++;
+      // Role categorizing
+      const r = (p.contingentRole || '').toUpperCase();
+      if (r.includes('RESPONSABLE') || r.includes('DIRIGENTE')) {
+        roleCounts.DIRIGENTE++;
+      } else if (r.includes('IST') || r.includes('SERVICIO')) {
+        roleCounts.IST++;
+      } else if (r.includes('CMT')) {
+        roleCounts.CMT++;
+      } else {
+        roleCounts.JOVEN++;
       }
-      // Status
+
+      // Status categorizing
       if (p.status in statusCounts) {
-        statusCounts[p.status as keyof typeof statusCounts]++;
+        statusCounts[p.status]++;
+      } else {
+        statusCounts.CONFIRMADO++;
       }
 
-      const fin = calculateFinancialSummary(
-        p.plan?.installments || [],
-        p.payments || [],
-        p.plan?.totalAmount
-      );
+      const target = p.targetFeeUSD && p.targetFeeUSD > 0
+        ? p.targetFeeUSD
+        : (p.plan?.totalAmount || 3600);
 
-      totalProjectedUSD += fin.totalRequired;
-      totalCollectedUSD += fin.totalPaid;
-      totalOutstandingUSD += fin.balanceRemaining;
-      totalOverdueUSD += fin.overdueAmount;
+      const paid = p.payments.reduce((sum, pay) => sum + pay.amount, 0);
+      const remaining = Math.max(0, target - paid);
 
-      if (fin.health === 'PAGADO_TOTAL') {
+      totalProjectedUSD += target;
+      totalCollectedUSD += paid;
+      totalOutstandingUSD += remaining;
+
+      if (p.debtToDateUSD && p.debtToDateUSD > 0) {
+        totalOverdueUSD += p.debtToDateUSD;
+      }
+
+      // Financial status from sheet or calculated
+      const sheetStatus = p.financialStatusSheet || '';
+      if (sheetStatus === 'Total Pagado' || (target > 0 && paid >= target)) {
         countCompletado++;
-      } else if (fin.health === 'EN_MORA') {
+      } else if (sheetStatus === 'Adeuda' || (p.debtToDateUSD && p.debtToDateUSD > 0)) {
         countEnMora++;
+      } else if (sheetStatus === 'BAJA' || p.status === 'RETIRADO') {
+        countBaja++;
       } else {
         countAlDia++;
       }
@@ -100,6 +126,7 @@ export async function GET() {
         countAlDia,
         countEnMora,
         countCompletado,
+        countBaja,
         roleCounts,
         statusCounts,
       },

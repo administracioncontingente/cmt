@@ -16,11 +16,23 @@ export async function GET(req: NextRequest) {
     const role = searchParams.get('role')?.trim() || '';
     const status = searchParams.get('status')?.trim() || '';
     const health = searchParams.get('health')?.trim() || '';
+    const limit = parseInt(searchParams.get('limit') || '500', 10);
+    const page = parseInt(searchParams.get('page') || '1', 10);
 
     const where: any = {};
 
     if (role && role !== 'ALL') {
-      where.contingentRole = role;
+      if (role === 'JOVEN') {
+        where.contingentRole = { in: ['Participante', 'Responsable de Patrulla', 'JOVEN'] };
+      } else if (role === 'DIRIGENTE') {
+        where.contingentRole = { in: ['RESPONSABLE', 'DIRIGENTE', 'Educador'] };
+      } else if (role === 'IST') {
+        where.contingentRole = 'IST';
+      } else if (role === 'CMT') {
+        where.contingentRole = 'CMT';
+      } else {
+        where.contingentRole = role;
+      }
     }
 
     if (status && status !== 'ALL') {
@@ -28,13 +40,22 @@ export async function GET(req: NextRequest) {
     }
 
     if (search) {
+      const cleanS = cleanRut(search);
       where.OR = [
         { firstName: { contains: search } },
         { lastName: { contains: search } },
+        { secondLastName: { contains: search } },
         { rut: { contains: search } },
+        { rutClean: { contains: cleanS || search } },
         { scoutGroup: { contains: search } },
         { scoutZone: { contains: search } },
+        { scoutDistrict: { contains: search } },
         { email: { contains: search } },
+        { cupoCode: { contains: search } },
+        { unitName: { contains: search } },
+        { patrolName: { contains: search } },
+        { city: { contains: search } },
+        { commune: { contains: search } },
       ];
     }
 
@@ -53,13 +74,19 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      take: limit,
+      skip: (page - 1) * limit,
     });
 
     const enriched = participants.map((p) => {
+      const totalAmount = p.targetFeeUSD && p.targetFeeUSD > 0
+        ? p.targetFeeUSD
+        : (p.plan?.totalAmount || 3600);
+
       const fin = calculateFinancialSummary(
         p.plan?.installments || [],
         p.payments || [],
-        p.plan?.totalAmount
+        totalAmount
       );
 
       return {
@@ -70,10 +97,19 @@ export async function GET(req: NextRequest) {
 
     // Filtro por salud financiera si aplica
     const filtered = health && health !== 'ALL'
-      ? enriched.filter((p) => p.financial.health === health)
+      ? enriched.filter((p) => {
+          if (health === 'AL_DIA') return p.financialStatusSheet === 'Al Día' || p.financial.health === 'AL_DIA';
+          if (health === 'EN_MORA') return p.financialStatusSheet === 'Adeuda' || p.financial.health === 'EN_MORA';
+          if (health === 'PAGADO_TOTAL') return p.financialStatusSheet === 'Total Pagado' || p.financial.health === 'PAGADO_TOTAL';
+          if (health === 'BAJA') return p.financialStatusSheet === 'BAJA' || p.status === 'RETIRADO';
+          return true;
+        })
       : enriched;
 
-    return NextResponse.json({ participants: filtered });
+    return NextResponse.json({
+      participants: filtered,
+      count: filtered.length,
+    });
   } catch (error) {
     console.error('Error in GET /api/participants:', error);
     return NextResponse.json(
@@ -96,14 +132,18 @@ export async function POST(req: NextRequest) {
       rut,
       firstName,
       lastName,
+      secondLastName,
       email,
       phone,
       birthDate,
       gender,
+      address,
+      commune,
+      city,
+      nationality,
       dietaryRestrictions,
       medicalNotes,
       guardianName,
-      guardianRelationship,
       guardianPhone,
       guardianEmail,
       scoutZone,
@@ -112,6 +152,13 @@ export async function POST(req: NextRequest) {
       contingentRole,
       status,
       unitOrPatrol,
+      cupoCode,
+      unit,
+      unitName,
+      patrol,
+      patrolName,
+      uniformSize,
+      targetFeeUSD,
       notes,
     } = body;
 
@@ -125,7 +172,6 @@ export async function POST(req: NextRequest) {
     const cleanedRut = cleanRut(rut);
     const formattedRut = formatRut(cleanedRut);
 
-    // Verificar unicidad de RUT
     const existing = await prisma.participant.findUnique({
       where: { rut: formattedRut },
     });
@@ -136,41 +182,58 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Asociar automáticamente el plan según el rol si no viene asignado
-    const roleKey = contingentRole || 'JOVEN';
-    const plan = await prisma.paymentPlan.findUnique({
-      where: { roleKey },
-    });
+    const rawRole = contingentRole || 'Participante';
+    let roleKey = 'JOVEN';
+    if (rawRole.toUpperCase().includes('RESPONSABLE') || rawRole.toUpperCase().includes('DIRIGENTE')) {
+      roleKey = 'DIRIGENTE';
+    } else if (rawRole.toUpperCase().includes('IST') || rawRole.toUpperCase().includes('SERVICIO')) {
+      roleKey = 'IST';
+    } else if (rawRole.toUpperCase().includes('CMT') || rawRole.toUpperCase().includes('CONTINGENTE')) {
+      roleKey = 'CMT';
+    }
+
+    const plan = await prisma.paymentPlan.findUnique({ where: { roleKey } });
 
     const newParticipant = await prisma.participant.create({
       data: {
+        id: `p_${cleanedRut.toLowerCase()}`,
         rut: formattedRut,
+        rutClean: cleanedRut,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
+        secondLastName: secondLastName?.trim() || null,
         email: email.trim().toLowerCase(),
         phone: phone?.trim() || null,
         birthDate: birthDate ? new Date(birthDate) : null,
         gender: gender || null,
+        address: address?.trim() || null,
+        commune: commune?.trim() || null,
+        city: city?.trim() || null,
+        nationality: nationality?.trim() || null,
         dietaryRestrictions: dietaryRestrictions?.trim() || null,
         medicalNotes: medicalNotes?.trim() || null,
         guardianName: guardianName?.trim() || null,
-        guardianRelationship: guardianRelationship?.trim() || null,
         guardianPhone: guardianPhone?.trim() || null,
         guardianEmail: guardianEmail?.trim() || null,
         scoutZone: scoutZone?.trim() || null,
         scoutDistrict: scoutDistrict?.trim() || null,
         scoutGroup: scoutGroup?.trim() || null,
-        contingentRole: roleKey,
-        status: status || 'PRE_INSCRITO',
+        contingentRole: rawRole,
+        status: status || 'CONFIRMADO',
         unitOrPatrol: unitOrPatrol?.trim() || null,
+        cupoCode: cupoCode?.trim() || null,
+        unit: unit?.trim() || null,
+        unitName: unitName?.trim() || null,
+        patrol: patrol?.trim() || null,
+        patrolName: patrolName?.trim() || null,
+        uniformSize: uniformSize?.trim() || null,
+        targetFeeUSD: targetFeeUSD ? parseFloat(targetFeeUSD) : null,
         planId: plan ? plan.id : null,
         notes: notes?.trim() || null,
       },
       include: {
         plan: {
-          include: {
-            installments: true,
-          },
+          include: { installments: true },
         },
         payments: true,
       },
@@ -179,7 +242,7 @@ export async function POST(req: NextRequest) {
     const financial = calculateFinancialSummary(
       newParticipant.plan?.installments || [],
       newParticipant.payments || [],
-      newParticipant.plan?.totalAmount
+      newParticipant.targetFeeUSD || newParticipant.plan?.totalAmount
     );
 
     return NextResponse.json(

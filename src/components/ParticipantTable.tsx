@@ -15,6 +15,8 @@ import {
   Eye,
   RefreshCw,
   Loader2,
+  Tag,
+  Compass,
 } from 'lucide-react';
 import { formatUSD } from '@/lib/finance';
 
@@ -84,18 +86,60 @@ export function ParticipantTable({
     window.open(`/api/export?${params.toString()}`, '_blank');
   };
 
-  const roleBadges: Record<string, { label: string; class: string }> = {
-    JOVEN: { label: 'Joven', class: 'bg-indigo-950/80 text-indigo-300 border-indigo-700/50' },
-    DIRIGENTE: { label: 'Dirigente', class: 'bg-amber-950/80 text-amber-300 border-amber-700/50' },
-    IST: { label: 'IST', class: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/50' },
-    CMT: { label: 'CMT', class: 'bg-purple-950/80 text-purple-300 border-purple-700/50' },
+  const getRoleBadge = (role: string) => {
+    const r = (role || '').toUpperCase();
+    if (r.includes('RESPONSABLE') || r.includes('DIRIGENTE')) {
+      return { label: 'Educador / Dirigente', class: 'bg-amber-950/80 text-amber-300 border-amber-700/50' };
+    }
+    if (r.includes('IST') || r.includes('SERVICIO')) {
+      return { label: 'IST Servicio', class: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/50' };
+    }
+    if (r.includes('CMT')) {
+      return { label: 'CMT Gestión', class: 'bg-purple-950/80 text-purple-300 border-purple-700/50' };
+    }
+    if (r.includes('PATRULLA')) {
+      return { label: 'Resp. Patrulla', class: 'bg-cyan-950/80 text-cyan-300 border-cyan-700/50' };
+    }
+    return { label: 'Joven Participante', class: 'bg-indigo-950/80 text-indigo-300 border-indigo-700/50' };
   };
 
-  const statusBadges: Record<string, { label: string; class: string }> = {
-    CONFIRMADO: { label: 'Confirmado', class: 'bg-emerald-950/60 text-emerald-400 border-emerald-700/60' },
-    PRE_INSCRITO: { label: 'Preinscrito', class: 'bg-blue-950/60 text-blue-400 border-blue-700/60' },
-    LISTA_ESPERA: { label: 'Lista Espera', class: 'bg-amber-950/60 text-amber-400 border-amber-700/60' },
-    RETIRADO: { label: 'Retirado', class: 'bg-red-950/60 text-red-400 border-red-700/60' },
+  const getFinancialBadge = (p: any) => {
+    const sheetStatus = p.financialStatusSheet;
+    const fin = p.financial;
+
+    if (sheetStatus === 'Total Pagado' || fin.isFullyPaid) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-950 text-blue-300 border border-blue-700/60">
+          <CheckCircle2 className="w-3 h-3 text-blue-400" />
+          Total Pagado
+        </span>
+      );
+    }
+
+    if (sheetStatus === 'BAJA' || p.status === 'RETIRADO') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+          BAJA / Retirado
+        </span>
+      );
+    }
+
+    if (sheetStatus === 'Adeuda' || fin.isOverdue || (p.debtToDateUSD && p.debtToDateUSD > 0)) {
+      const overdue = p.debtToDateUSD || fin.overdueAmount;
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-950/80 text-red-300 border border-red-700/80">
+          <AlertCircle className="w-3 h-3 text-red-400" />
+          Adeuda {overdue > 0 ? `(${formatUSD(overdue)})` : ''}
+        </span>
+      );
+    }
+
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700/60">
+        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+        Al Día
+      </span>
+    );
   };
 
   return (
@@ -106,9 +150,9 @@ export function ParticipantTable({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-white flex items-center gap-2">
-              Registro del Contingente
-              <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs font-mono font-medium">
-                {participants.length}
+              Contingente Oficial AGSCH
+              <span className="px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700/50 text-xs font-mono font-medium">
+                {participants.length} participantes
               </span>
             </h2>
             <button
@@ -126,7 +170,7 @@ export function ParticipantTable({
               className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium flex items-center gap-1.5 border border-slate-700 transition-all cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-              Importar Excel
+              Importar Planilla
             </button>
 
             <button
@@ -134,7 +178,7 @@ export function ParticipantTable({
               className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium flex items-center gap-1.5 border border-slate-700 transition-all cursor-pointer"
             >
               <Download className="w-3.5 h-3.5 text-blue-400" />
-              Exportar
+              Exportar Nómina
             </button>
 
             <button
@@ -142,7 +186,7 @@ export function ParticipantTable({
               className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
             >
               <UserPlus className="w-3.5 h-3.5" />
-              Inscribir Participante
+              Nuevo Registro
             </button>
           </div>
         </div>
@@ -158,7 +202,7 @@ export function ParticipantTable({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por RUT, Nombre, Grupo Scout o Zona..."
+              placeholder="Buscar por RUT, Nombre, Código Cupo (IST106), Grupo, Unidad o Comuna..."
               className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
             />
           </div>
@@ -171,8 +215,8 @@ export function ParticipantTable({
               className="w-full px-2.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
             >
               <option value="ALL">Todos los Roles</option>
-              <option value="JOVEN">Jóvenes</option>
-              <option value="DIRIGENTE">Dirigentes</option>
+              <option value="JOVEN">Jóvenes / Participantes</option>
+              <option value="DIRIGENTE">Responsables / Educadores</option>
               <option value="IST">IST (Servicio)</option>
               <option value="CMT">CMT (Contingente)</option>
             </select>
@@ -188,8 +232,7 @@ export function ParticipantTable({
               <option value="ALL">Todos los Estados</option>
               <option value="CONFIRMADO">Confirmados</option>
               <option value="PRE_INSCRITO">Preinscritos</option>
-              <option value="LISTA_ESPERA">Lista de Espera</option>
-              <option value="RETIRADO">Retirados</option>
+              <option value="RETIRADO">Bajas / Retirados</option>
             </select>
           </div>
 
@@ -201,9 +244,10 @@ export function ParticipantTable({
               className="w-full px-2.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
             >
               <option value="ALL">Todas las Situaciones de Pago</option>
-              <option value="AL_DIA">Al día (sin moras)</option>
-              <option value="EN_MORA">En mora (cuotas vencidas)</option>
-              <option value="PAGADO_TOTAL">100% Pagado</option>
+              <option value="AL_DIA">Al Día</option>
+              <option value="EN_MORA">Adeuda / En Mora</option>
+              <option value="PAGADO_TOTAL">Total Pagado</option>
+              <option value="BAJA">Baja</option>
             </select>
           </div>
         </div>
@@ -216,11 +260,11 @@ export function ParticipantTable({
             <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400">
               <th className="py-3 px-4 font-semibold">Participante</th>
               <th className="py-3 px-3 font-semibold">Rol</th>
-              <th className="py-3 px-3 font-semibold">Grupo y Zona AGSCH</th>
-              <th className="py-3 px-3 font-semibold">Estado</th>
-              <th className="py-3 px-3 font-semibold">Progreso Cuotas (USD)</th>
-              <th className="py-3 px-3 font-semibold">Saldo Pendiente</th>
-              <th className="py-3 px-3 font-semibold">Salud Financiera</th>
+              <th className="py-3 px-3 font-semibold">Grupo y Zona</th>
+              <th className="py-3 px-3 font-semibold">Unidad / Territorium</th>
+              <th className="py-3 px-3 font-semibold">Cuota & Abonos (USD)</th>
+              <th className="py-3 px-3 font-semibold">Saldo Restante</th>
+              <th className="py-3 px-3 font-semibold">Situación Financiera</th>
               <th className="py-3 px-4 font-semibold text-right">Acciones</th>
             </tr>
           </thead>
@@ -229,30 +273,29 @@ export function ParticipantTable({
               <tr>
                 <td colSpan={8} className="py-12 text-center text-slate-400">
                   <Loader2 className="w-6 h-6 animate-spin text-indigo-500 mx-auto mb-2" />
-                  Cargando participantes...
+                  Cargando nómina oficial...
                 </td>
               </tr>
             ) : participants.length === 0 ? (
               <tr>
                 <td colSpan={8} className="py-12 text-center text-slate-500">
-                  No se encontraron participantes que coincidan con los filtros de búsqueda.
+                  No se encontraron registros que coincidan con los filtros aplicados.
                 </td>
               </tr>
             ) : (
               participants.map((p) => {
                 const fin = p.financial;
-                const roleBadge = roleBadges[p.contingentRole] || {
-                  label: p.contingentRole,
-                  class: 'bg-slate-800 text-slate-300 border-slate-700',
-                };
-                const statusBadge = statusBadges[p.status] || {
-                  label: p.status,
-                  class: 'bg-slate-800 text-slate-300 border-slate-700',
-                };
+                const roleBadge = getRoleBadge(p.contingentRole);
 
-                const percentage = fin.totalRequired > 0
-                  ? Math.min(100, Math.round((fin.totalPaid / fin.totalRequired) * 100))
+                const totalTarget = p.targetFeeUSD && p.targetFeeUSD > 0
+                  ? p.targetFeeUSD
+                  : fin.totalRequired;
+
+                const percentage = totalTarget > 0
+                  ? Math.min(100, Math.round((fin.totalPaid / totalTarget) * 100))
                   : 0;
+
+                const remaining = Math.max(0, totalTarget - fin.totalPaid);
 
                 return (
                   <tr
@@ -262,14 +305,23 @@ export function ParticipantTable({
                   >
                     {/* Participant Details */}
                     <td className="py-3 px-4">
-                      <div className="font-bold text-white group-hover:text-indigo-300 transition-colors">
-                        {p.firstName} {p.lastName}
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white group-hover:text-indigo-300 transition-colors">
+                          {p.firstName} {p.lastName} {p.secondLastName || ''}
+                        </span>
+                        {p.cupoCode && (
+                          <span className="px-1.5 py-0.2 rounded bg-indigo-950 border border-indigo-700/50 text-indigo-300 font-mono text-[9px] font-bold">
+                            {p.cupoCode}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="font-mono text-[11px] text-slate-400">
+                        <span className="font-mono text-[11px] text-slate-400 font-medium">
                           {p.rut}
                         </span>
-                        <span className="text-[11px] text-slate-500">• {p.email}</span>
+                        <span className="text-[11px] text-slate-500 truncate max-w-[180px]">
+                          • {p.email}
+                        </span>
                       </div>
                     </td>
 
@@ -284,7 +336,7 @@ export function ParticipantTable({
 
                     {/* Scout Group / Zone */}
                     <td className="py-3 px-3">
-                      <div className="text-slate-300 font-medium truncate max-w-[180px]">
+                      <div className="text-slate-300 font-medium truncate max-w-[170px]">
                         {p.scoutGroup || 'Sin Grupo'}
                       </div>
                       <div className="text-[10px] text-slate-500">
@@ -292,13 +344,15 @@ export function ParticipantTable({
                       </div>
                     </td>
 
-                    {/* Status */}
+                    {/* Unit / Territory */}
                     <td className="py-3 px-3">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-semibold border ${statusBadge.class}`}
-                      >
-                        {statusBadge.label}
-                      </span>
+                      <div className="text-slate-300 font-medium truncate max-w-[170px]">
+                        {p.unitName || p.unit || 'Por asignar'}
+                      </div>
+                      <div className="text-[10px] text-slate-500">
+                        {p.patrolName ? `Patrulla ${p.patrolName}` : ''}
+                        {p.territorium ? ` • Territorio ${p.territorium}` : ''}
+                      </div>
                     </td>
 
                     {/* Progress / Paid USD */}
@@ -308,13 +362,13 @@ export function ParticipantTable({
                           {formatUSD(fin.totalPaid)}
                         </span>
                         <span className="text-slate-400 font-mono">
-                          / {formatUSD(fin.totalRequired)}
+                          / {formatUSD(totalTarget)}
                         </span>
                       </div>
-                      <div className="w-28 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                      <div className="w-24 bg-slate-800 rounded-full h-1.5 overflow-hidden">
                         <div
                           className={`h-1.5 rounded-full ${
-                            percentage === 100 ? 'bg-blue-500' : 'bg-emerald-500'
+                            percentage >= 100 ? 'bg-blue-500' : 'bg-emerald-500'
                           }`}
                           style={{ width: `${percentage}%` }}
                         />
@@ -323,27 +377,12 @@ export function ParticipantTable({
 
                     {/* Pending Balance */}
                     <td className="py-3 px-3 font-mono font-bold text-slate-300">
-                      {formatUSD(fin.balanceRemaining)}
+                      {formatUSD(remaining)}
                     </td>
 
-                    {/* Financial Health Badge */}
+                    {/* Financial Badge */}
                     <td className="py-3 px-3">
-                      {fin.isFullyPaid ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-950 text-blue-400 border border-blue-700/60">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Pagado 100%
-                        </span>
-                      ) : fin.isOverdue ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-950/80 text-red-300 border border-red-700/80">
-                          <AlertCircle className="w-3 h-3 text-red-400" />
-                          En mora ({formatUSD(fin.overdueAmount)})
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-700/60">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Al día
-                        </span>
-                      )}
+                      {getFinancialBadge(p)}
                     </td>
 
                     {/* Actions */}

@@ -18,15 +18,27 @@ export async function GET(req: NextRequest) {
     const health = searchParams.get('health')?.trim() || '';
 
     const where: any = {};
-    if (role && role !== 'ALL') where.contingentRole = role;
+    if (role && role !== 'ALL') {
+      if (role === 'JOVEN') where.contingentRole = { in: ['Participante', 'Responsable de Patrulla', 'JOVEN'] };
+      else if (role === 'DIRIGENTE') where.contingentRole = { in: ['RESPONSABLE', 'DIRIGENTE', 'Educador'] };
+      else if (role === 'IST') where.contingentRole = 'IST';
+      else if (role === 'CMT') where.contingentRole = 'CMT';
+      else where.contingentRole = role;
+    }
+
     if (status && status !== 'ALL') where.status = status;
+
     if (search) {
       where.OR = [
         { firstName: { contains: search } },
         { lastName: { contains: search } },
+        { secondLastName: { contains: search } },
         { rut: { contains: search } },
         { scoutGroup: { contains: search } },
         { scoutZone: { contains: search } },
+        { cupoCode: { contains: search } },
+        { unitName: { contains: search } },
+        { patrolName: { contains: search } },
         { email: { contains: search } },
       ];
     }
@@ -45,93 +57,67 @@ export async function GET(req: NextRequest) {
     });
 
     const enriched = participants.map((p) => {
+      const totalAmount = p.targetFeeUSD && p.targetFeeUSD > 0
+        ? p.targetFeeUSD
+        : (p.plan?.totalAmount || 3600);
+
       const fin = calculateFinancialSummary(
         p.plan?.installments || [],
         p.payments || [],
-        p.plan?.totalAmount
+        totalAmount
       );
-      return { ...p, financial: fin };
+      return { ...p, financial: fin, totalAmount };
     });
 
     const filtered = health && health !== 'ALL'
-      ? enriched.filter((p) => p.financial.health === health)
+      ? enriched.filter((p) => {
+          if (health === 'AL_DIA') return p.financialStatusSheet === 'Al Día' || p.financial.health === 'AL_DIA';
+          if (health === 'EN_MORA') return p.financialStatusSheet === 'Adeuda' || p.financial.health === 'EN_MORA';
+          if (health === 'PAGADO_TOTAL') return p.financialStatusSheet === 'Total Pagado' || p.financial.health === 'PAGADO_TOTAL';
+          if (health === 'BAJA') return p.financialStatusSheet === 'BAJA' || p.status === 'RETIRADO';
+          return true;
+        })
       : enriched;
 
-    const roleLabels: Record<string, string> = {
-      JOVEN: 'Joven / Participante',
-      DIRIGENTE: 'Dirigente de Unidad',
-      IST: 'IST (Servicio)',
-      CMT: 'Equipo de Contingente',
-    };
-
-    const statusLabels: Record<string, string> = {
-      PRE_INSCRITO: 'Preinscrito',
-      CONFIRMADO: 'Confirmado',
-      LISTA_ESPERA: 'Lista de Espera',
-      RETIRADO: 'Retirado',
-    };
-
-    const healthLabels: Record<string, string> = {
-      AL_DIA: 'Al día',
-      EN_MORA: 'En mora',
-      PAGADO_TOTAL: 'Pagado total',
-    };
-
-    const dataRows = filtered.map((p) => ({
-      'RUT': p.rut,
-      'Nombres': p.firstName,
-      'Apellidos': p.lastName,
-      'Rol Contingente': roleLabels[p.contingentRole] || p.contingentRole,
-      'Estado Inscripción': statusLabels[p.status] || p.status,
-      'Correo': p.email,
-      'Teléfono': p.phone || '',
-      'Zona Scout': p.scoutZone || '',
-      'Distrito Scout': p.scoutDistrict || '',
-      'Grupo Scout': p.scoutGroup || '',
-      'Unidad / Patrulla': p.unitOrPatrol || '',
-      'Total Plan (USD)': p.financial.totalRequired,
-      'Abonado (USD)': p.financial.totalPaid,
-      'Saldo Pendiente (USD)': p.financial.balanceRemaining,
-      'Monto en Mora (USD)': p.financial.overdueAmount,
-      'Estado Financiero': healthLabels[p.financial.health] || p.financial.health,
-      'Apoderado': p.guardianName || '',
-      'Teléfono Apoderado': p.guardianPhone || '',
-      'Restricciones Dietarias': p.dietaryRestrictions || '',
-      'Notas Médicas': p.medicalNotes || '',
-    }));
+    const dataRows = filtered.map((p) => {
+      const remaining = Math.max(0, p.totalAmount - p.financial.totalPaid);
+      return {
+        'Código Cupo': p.cupoCode || '',
+        'RUT': p.rut,
+        'Nombres': p.firstName,
+        'Primer Apellido': p.lastName,
+        'Segundo Apellido': p.secondLastName || '',
+        'Rol Contingente': p.contingentRole,
+        'Estado': p.status,
+        'Correo': p.email,
+        'Teléfono': p.phone || '',
+        'Comuna': p.commune || '',
+        'Ciudad': p.city || '',
+        'Zona Scout': p.scoutZone || '',
+        'Distrito Scout': p.scoutDistrict || '',
+        'Grupo Scout': p.scoutGroup || '',
+        'Territorium': p.territorium || '',
+        'Unidad': p.unitName || p.unit || '',
+        'Patrulla': p.patrolName || p.patrol || '',
+        'Talla Indumentaria': p.uniformSize || '',
+        'Registro Polonia': p.polandRegistered || '',
+        'Cuota Final (USD)': p.totalAmount,
+        'Abonado Real (USD)': p.financial.totalPaid,
+        'Saldo Restante (USD)': remaining,
+        'Deuda a Fecha (USD)': p.debtToDateUSD || p.financial.overdueAmount,
+        'Situación Financiera': p.financialStatusSheet || (p.financial.isFullyPaid ? 'Total Pagado' : 'Al Día'),
+        'Nombre Apoderado': p.guardianName || '',
+        'Teléfono Apoderado': p.guardianPhone || '',
+        'Correo Apoderado': p.guardianEmail || '',
+        'Cédula Drive URL': p.idCardUrl || '',
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(dataRows);
-
-    // Ajustar anchos de columnas
-    const colWidths = [
-      { wch: 14 }, // RUT
-      { wch: 18 }, // Nombres
-      { wch: 20 }, // Apellidos
-      { wch: 22 }, // Rol
-      { wch: 18 }, // Estado
-      { wch: 26 }, // Correo
-      { wch: 16 }, // Telefono
-      { wch: 18 }, // Zona
-      { wch: 18 }, // Distrito
-      { wch: 26 }, // Grupo
-      { wch: 24 }, // Unidad
-      { wch: 16 }, // Total USD
-      { wch: 15 }, // Abonado USD
-      { wch: 18 }, // Saldo USD
-      { wch: 18 }, // Mora USD
-      { wch: 16 }, // Estado Fin
-      { wch: 22 }, // Apoderado
-      { wch: 18 }, // Tel Apoderado
-      { wch: 22 }, // Dieta
-      { wch: 22 }, // Medico
-    ];
-    worksheet['!cols'] = colWidths;
-
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Contingente Polonia 2027');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Nómina Contingente AGSCH');
 
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-
     const filename = `Contingente_AGSCH_Polonia2027_${new Date().toISOString().split('T')[0]}.xlsx`;
 
     return new NextResponse(buffer, {

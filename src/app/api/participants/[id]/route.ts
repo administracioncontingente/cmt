@@ -44,10 +44,14 @@ export async function GET(
       );
     }
 
+    const totalAmount = participant.targetFeeUSD && participant.targetFeeUSD > 0
+      ? participant.targetFeeUSD
+      : (participant.plan?.totalAmount || 3600);
+
     const financial = calculateFinancialSummary(
       participant.plan?.installments || [],
       participant.payments || [],
-      participant.plan?.totalAmount
+      totalAmount
     );
 
     return NextResponse.json({ participant: { ...participant, financial } });
@@ -83,8 +87,10 @@ export async function PUT(
     }
 
     let formattedRut = existing.rut;
+    let cleanR = existing.rutClean;
     if (body.rut) {
-      formattedRut = formatRut(cleanRut(body.rut));
+      cleanR = cleanRut(body.rut);
+      formattedRut = formatRut(cleanR);
       if (formattedRut !== existing.rut) {
         const checkDupl = await prisma.participant.findUnique({
           where: { rut: formattedRut },
@@ -98,31 +104,25 @@ export async function PUT(
       }
     }
 
-    // Si cambia el rol, actualizar plan asociado si no se fuerza uno específico
-    let planId = body.planId !== undefined ? body.planId : existing.planId;
-    if (body.contingentRole && body.contingentRole !== existing.contingentRole) {
-      const targetPlan = await prisma.paymentPlan.findUnique({
-        where: { roleKey: body.contingentRole },
-      });
-      if (targetPlan) {
-        planId = targetPlan.id;
-      }
-    }
-
     const updated = await prisma.participant.update({
       where: { id },
       data: {
         rut: formattedRut,
+        rutClean: cleanR,
         firstName: body.firstName?.trim() ?? existing.firstName,
         lastName: body.lastName?.trim() ?? existing.lastName,
+        secondLastName: body.secondLastName !== undefined ? body.secondLastName?.trim() : existing.secondLastName,
         email: body.email?.trim().toLowerCase() ?? existing.email,
         phone: body.phone !== undefined ? body.phone?.trim() : existing.phone,
         birthDate: body.birthDate ? new Date(body.birthDate) : existing.birthDate,
         gender: body.gender !== undefined ? body.gender : existing.gender,
+        address: body.address !== undefined ? body.address?.trim() : existing.address,
+        commune: body.commune !== undefined ? body.commune?.trim() : existing.commune,
+        city: body.city !== undefined ? body.city?.trim() : existing.city,
+        nationality: body.nationality !== undefined ? body.nationality?.trim() : existing.nationality,
         dietaryRestrictions: body.dietaryRestrictions !== undefined ? body.dietaryRestrictions?.trim() : existing.dietaryRestrictions,
         medicalNotes: body.medicalNotes !== undefined ? body.medicalNotes?.trim() : existing.medicalNotes,
         guardianName: body.guardianName !== undefined ? body.guardianName?.trim() : existing.guardianName,
-        guardianRelationship: body.guardianRelationship !== undefined ? body.guardianRelationship?.trim() : existing.guardianRelationship,
         guardianPhone: body.guardianPhone !== undefined ? body.guardianPhone?.trim() : existing.guardianPhone,
         guardianEmail: body.guardianEmail !== undefined ? body.guardianEmail?.trim() : existing.guardianEmail,
         scoutZone: body.scoutZone !== undefined ? body.scoutZone?.trim() : existing.scoutZone,
@@ -131,7 +131,14 @@ export async function PUT(
         contingentRole: body.contingentRole ?? existing.contingentRole,
         status: body.status ?? existing.status,
         unitOrPatrol: body.unitOrPatrol !== undefined ? body.unitOrPatrol?.trim() : existing.unitOrPatrol,
-        planId,
+        cupoCode: body.cupoCode !== undefined ? body.cupoCode?.trim() : existing.cupoCode,
+        unit: body.unit !== undefined ? body.unit?.trim() : existing.unit,
+        unitName: body.unitName !== undefined ? body.unitName?.trim() : existing.unitName,
+        patrol: body.patrol !== undefined ? body.patrol?.trim() : existing.patrol,
+        patrolName: body.patrolName !== undefined ? body.patrolName?.trim() : existing.patrolName,
+        uniformSize: body.uniformSize !== undefined ? body.uniformSize?.trim() : existing.uniformSize,
+        polandRegistered: body.polandRegistered !== undefined ? body.polandRegistered?.trim() : existing.polandRegistered,
+        targetFeeUSD: body.targetFeeUSD !== undefined ? parseFloat(body.targetFeeUSD) : existing.targetFeeUSD,
         notes: body.notes !== undefined ? body.notes?.trim() : existing.notes,
       },
       include: {
@@ -146,10 +153,14 @@ export async function PUT(
       },
     });
 
+    const totalAmount = updated.targetFeeUSD && updated.targetFeeUSD > 0
+      ? updated.targetFeeUSD
+      : (updated.plan?.totalAmount || 3600);
+
     const financial = calculateFinancialSummary(
       updated.plan?.installments || [],
       updated.payments || [],
-      updated.plan?.totalAmount
+      totalAmount
     );
 
     return NextResponse.json({ participant: { ...updated, financial } });

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Users, DollarSign, AlertTriangle, CheckCircle, TrendingUp, Clock } from 'lucide-react';
+import { Users, DollarSign, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { formatUSD } from '@/lib/finance';
 
 interface StatsOverviewProps {
@@ -14,6 +14,7 @@ interface StatsOverviewProps {
     countAlDia: number;
     countEnMora: number;
     countCompletado: number;
+    countBaja: number;
     roleCounts: {
       JOVEN: number;
       DIRIGENTE: number;
@@ -21,8 +22,8 @@ interface StatsOverviewProps {
       CMT: number;
     };
     statusCounts: {
-      PRE_INSCRITO: number;
       CONFIRMADO: number;
+      PRE_INSCRITO: number;
       LISTA_ESPERA: number;
       RETIRADO: number;
     };
@@ -50,14 +51,14 @@ export function StatsOverview({ stats }: StatsOverviewProps) {
         </div>
         <div className="flex items-baseline gap-2 mb-2">
           <span className="text-3xl font-extrabold text-white">
-            {stats.totalParticipants}
+            {stats.totalParticipants.toLocaleString('es-CL')}
           </span>
           <span className="text-xs text-slate-400">inscritos</span>
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-slate-400 pt-2 border-t border-slate-800/80">
+        <div className="flex items-center gap-2 text-[11px] text-slate-400 pt-2 border-t border-slate-800/80 flex-wrap">
           <span className="text-indigo-400 font-semibold">{stats.roleCounts.JOVEN} Jóvenes</span>
           <span>•</span>
-          <span className="text-amber-400 font-semibold">{stats.roleCounts.DIRIGENTE} Dir.</span>
+          <span className="text-amber-400 font-semibold">{stats.roleCounts.DIRIGENTE} Dirigentes</span>
           <span>•</span>
           <span className="text-emerald-400 font-semibold">{stats.roleCounts.IST} IST</span>
           <span>•</span>
@@ -69,7 +70,7 @@ export function StatsOverview({ stats }: StatsOverviewProps) {
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden group hover:border-slate-700 transition-all">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            Recaudación Total
+            Recaudación Real
           </span>
           <div className="w-9 h-9 rounded-xl bg-emerald-950/80 border border-emerald-700/40 text-emerald-400 flex items-center justify-center">
             <DollarSign className="w-4 h-4" />
@@ -110,9 +111,9 @@ export function StatsOverview({ stats }: StatsOverviewProps) {
           </span>
         </div>
         <div className="flex items-center gap-2 text-[11px] text-slate-400 pt-2 border-t border-slate-800/80">
-          <span className="text-emerald-400 font-semibold">{stats.countCompletado} pagados 100%</span>
+          <span className="text-blue-400 font-semibold">{stats.countCompletado} pagados 100%</span>
           <span>•</span>
-          <span className="text-blue-400 font-semibold">{stats.countAlDia} al día</span>
+          <span className="text-emerald-400 font-semibold">{stats.countAlDia} al día</span>
         </div>
       </div>
 
@@ -122,7 +123,7 @@ export function StatsOverview({ stats }: StatsOverviewProps) {
       }`}>
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            Cuotas en Mora
+            Cuotas en Mora / Adeudo
           </span>
           <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
             stats.countEnMora > 0
@@ -138,7 +139,7 @@ export function StatsOverview({ stats }: StatsOverviewProps) {
           </span>
         </div>
         <div className="flex items-center justify-between text-[11px] pt-2 border-t border-slate-800/80">
-          <span className="text-slate-400">Participantes retrasados:</span>
+          <span className="text-slate-400">Participantes con adeudo:</span>
           <span className={`font-bold px-2 py-0.5 rounded-full ${
             stats.countEnMora > 0 ? 'bg-red-900/50 text-red-300' : 'bg-slate-800 text-slate-400'
           }`}>
