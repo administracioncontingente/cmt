@@ -14,9 +14,13 @@ export async function middleware(req: NextRequest) {
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/auth/login') ||
+    pathname.startsWith('/ficha-medica') ||
+    pathname.startsWith('/medico') ||
+    pathname.startsWith('/api/medical') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon.ico') ||
-    pathname.startsWith('/public')
+    pathname.startsWith('/public') ||
+    pathname.startsWith('/calendarios')
   ) {
     return NextResponse.next();
   }

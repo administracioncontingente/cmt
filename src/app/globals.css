@@ -1,26 +1,40 @@
 @import "tailwindcss";
 
+@theme {
+  --color-agsch-blue-deep: #000c33;
+  --color-agsch-blue-primary: #001558;
+  --color-agsch-blue-surface: #031c6a;
+  --color-agsch-blue-card: #05237e;
+  --color-agsch-blue-border: #0d349e;
+  --color-agsch-yellow-primary: #FEB135;
+  --color-agsch-yellow-hover: #e59c22;
+  --color-agsch-yellow-light: #fff4e0;
+  --font-sans: 'Nunito Sans', 'Lato', system-ui, -apple-system, sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #000c33;
+  --foreground: #f8fafc;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Nunito Sans', 'Lato', system-ui, -apple-system, sans-serif;
+}
+
+/* Custom scrollbar for deep navy UI */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #001558;
+}
+::-webkit-scrollbar-thumb {
+  background: #0d349e;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #FEB135;
 }

@@ -19,6 +19,7 @@ export async function GET(
     const participant = await prisma.participant.findUnique({
       where: { id },
       include: {
+        medicalRecord: true,
         plan: {
           include: {
             installments: {
@@ -142,6 +143,7 @@ export async function PUT(
         notes: body.notes !== undefined ? body.notes?.trim() : existing.notes,
       },
       include: {
+        medicalRecord: true,
         plan: {
           include: {
             installments: { orderBy: { installmentNumber: 'asc' } },

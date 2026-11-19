@@ -62,6 +62,14 @@ export async function GET(req: NextRequest) {
     const participants = await prisma.participant.findMany({
       where,
       include: {
+        medicalRecord: {
+          select: {
+            completionStatus: true,
+            hasSevereAllergies: true,
+            bloodType: true,
+            qrAccessCode: true,
+          },
+        },
         plan: {
           include: {
             installments: {
@@ -232,6 +240,14 @@ export async function POST(req: NextRequest) {
         notes: notes?.trim() || null,
       },
       include: {
+        medicalRecord: {
+          select: {
+            completionStatus: true,
+            hasSevereAllergies: true,
+            bloodType: true,
+            qrAccessCode: true,
+          },
+        },
         plan: {
           include: { installments: true },
         },

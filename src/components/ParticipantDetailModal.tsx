@@ -9,19 +9,25 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  DollarSign,
   PlusCircle,
   Trash2,
-  FileText,
   Phone,
   Mail,
   Shield,
   Loader2,
   ExternalLink,
-  MapPin,
   Tent,
-  Shirt,
   Award,
+  Heart,
+  QrCode,
+  Share2,
+  Printer,
+  Globe,
+  Droplet,
+  Pill,
+  Syringe,
+  AlertTriangle,
+  FileText,
 } from 'lucide-react';
 import { formatUSD, FinancialSummary } from '@/lib/finance';
 
@@ -36,10 +42,13 @@ export function ParticipantDetailModal({
   onClose,
   onParticipantUpdated,
 }: ParticipantDetailModalProps) {
-  const [activeTab, setActiveTab] = useState<'finance' | 'profile' | 'logistics'>('finance');
+  const [activeTab, setActiveTab] = useState<'finance' | 'profile' | 'logistics' | 'medical'>('finance');
+  const [medLang, setMedLang] = useState<'es' | 'en' | 'pl'>('es');
+  const [copiedLink, setCopiedLink] = useState(false);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCalendarPreview, setShowCalendarPreview] = useState(false);
 
   // Form states for new payment
   const [submittingPayment, setSubmittingPayment] = useState(false);
@@ -137,10 +146,10 @@ export function ParticipantDetailModal({
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full text-center">
-          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-3" />
-          <p className="text-slate-300 text-sm">Cargando ficha oficial del participante...</p>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="bg-[#001558] border border-[#0d349e] rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+          <Loader2 className="w-8 h-8 text-[#FEB135] animate-spin mx-auto mb-3" />
+          <p className="text-slate-200 text-sm font-medium">Cargando ficha oficial del participante...</p>
         </div>
       </div>
     );
@@ -148,12 +157,12 @@ export function ParticipantDetailModal({
 
   if (error || !data) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full text-center">
-          <p className="text-red-400 text-sm mb-4">{error || 'No se encontró el participante'}</p>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="bg-[#001558] border border-[#0d349e] rounded-2xl p-6 max-w-md w-full text-center shadow-2xl">
+          <p className="text-red-300 text-sm mb-4">{error || 'No se encontró el participante'}</p>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm"
+            className="px-4 py-2 bg-[#000c33] hover:bg-[#031c6a] text-white rounded-xl text-xs font-bold"
           >
             Cerrar
           </button>
@@ -167,48 +176,48 @@ export function ParticipantDetailModal({
   const remainingFee = Math.max(0, targetFee - fin.totalPaid);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-6 overflow-y-auto">
+      <div className="bg-[#001558] border border-[#0d349e] rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div className="px-6 py-4 border-b border-[#0d349e] flex items-center justify-between bg-[#000c33]/70">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-indigo-700 to-indigo-500 flex items-center justify-center text-white font-bold text-lg shadow-md shrink-0">
+            <div className="w-11 h-11 rounded-xl bg-[#000c33] border border-[#FEB135]/50 flex items-center justify-center text-[#FEB135] font-black text-lg shadow-md shrink-0">
               {data.firstName[0]}
               {data.lastName[0]}
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-bold text-white">
+                <h2 className="text-lg font-black text-white tracking-tight">
                   {data.firstName} {data.lastName} {data.secondLastName || ''}
                 </h2>
                 {data.cupoCode && (
-                  <span className="font-mono text-xs px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/60 font-bold">
+                  <span className="font-mono text-xs px-2 py-0.5 rounded bg-[#000c33] text-[#FEB135] border border-[#FEB135]/50 font-bold">
                     Cupo: {data.cupoCode}
                   </span>
                 )}
-                <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                <span className="font-mono text-xs px-2 py-0.5 rounded bg-[#000c33] text-slate-200 border border-[#0d349e]">
                   {data.rut}
                 </span>
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-700/50">
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#031c6a] text-indigo-200 border border-[#0d349e]">
                   {data.contingentRole}
                 </span>
                 {data.financialStatusSheet && (
                   <span
-                    className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+                    className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
                       data.financialStatusSheet === 'Total Pagado'
-                        ? 'bg-blue-950 text-blue-300 border-blue-700'
+                        ? 'bg-[#000c33] text-[#FEB135] border-[#FEB135]/60'
                         : data.financialStatusSheet === 'Adeuda'
-                        ? 'bg-red-950 text-red-300 border-red-700'
+                        ? 'bg-red-950 text-red-200 border-red-700'
                         : data.financialStatusSheet === 'BAJA'
-                        ? 'bg-slate-800 text-slate-400 border-slate-700'
-                        : 'bg-emerald-950 text-emerald-300 border-emerald-700'
+                        ? 'bg-slate-800 text-slate-300 border-slate-700'
+                        : 'bg-emerald-950 text-emerald-200 border-emerald-700'
                     }`}
                   >
                     {data.financialStatusSheet}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-300 mt-0.5">
                 {data.scoutGroup ? `${data.scoutGroup} • ` : ''}
                 {data.scoutDistrict ? `Distrito ${data.scoutDistrict} • ` : ''}
                 {data.scoutZone ? `Zona ${data.scoutZone}` : ''}
@@ -218,20 +227,20 @@ export function ParticipantDetailModal({
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#000c33] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab navigation */}
-        <div className="flex border-b border-slate-800 px-6 bg-slate-900/50">
+        <div className="flex border-b border-[#0d349e] px-6 bg-[#000c33]/40">
           <button
             onClick={() => setActiveTab('finance')}
-            className={`py-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
+            className={`py-3 px-4 text-xs font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
               activeTab === 'finance'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-[#FEB135] text-[#FEB135]'
+                : 'border-transparent text-slate-300 hover:text-white'
             }`}
           >
             <CreditCard className="w-4 h-4" />
@@ -239,10 +248,10 @@ export function ParticipantDetailModal({
           </button>
           <button
             onClick={() => setActiveTab('profile')}
-            className={`py-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
+            className={`py-3 px-4 text-xs font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
               activeTab === 'profile'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-[#FEB135] text-[#FEB135]'
+                : 'border-transparent text-slate-300 hover:text-white'
             }`}
           >
             <User className="w-4 h-4" />
@@ -250,75 +259,91 @@ export function ParticipantDetailModal({
           </button>
           <button
             onClick={() => setActiveTab('logistics')}
-            className={`py-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
+            className={`py-3 px-4 text-xs font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
               activeTab === 'logistics'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-[#FEB135] text-[#FEB135]'
+                : 'border-transparent text-slate-300 hover:text-white'
             }`}
           >
             <Tent className="w-4 h-4" />
             Logística & Asignación
           </button>
+          <button
+            onClick={() => setActiveTab('medical')}
+            className={`py-3 px-4 text-xs font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
+              activeTab === 'medical'
+                ? 'border-[#FEB135] text-[#FEB135]'
+                : 'border-transparent text-slate-300 hover:text-white'
+            }`}
+          >
+            <Heart className="w-4 h-4 text-red-400" />
+            Ficha Médica WSJ
+            {data.medicalRecord?.completionStatus === 'COMPLETED' ? (
+              <span className="w-2 h-2 rounded-full bg-emerald-400" title="Ficha completada" />
+            ) : (
+              <span className="w-2 h-2 rounded-full bg-amber-400" title="Ficha pendiente" />
+            )}
+          </button>
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
+        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs bg-[#001558]">
           {activeTab === 'finance' && (
             <>
               {/* Summary Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
-                  <span className="text-[11px] font-medium text-slate-400 uppercase">
+                <div className="bg-[#000c33]/80 p-3.5 rounded-xl border border-[#0d349e]">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                     Cuota Oficial Final
                   </span>
-                  <p className="text-xl font-bold text-white mt-1">
+                  <p className="text-xl font-black text-white mt-1">
                     {formatUSD(targetFee)}
                   </p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">
+                  <p className="text-[10px] text-slate-400 mt-0.5">
                     {data.feeType || 'Cuota asignada'}
                   </p>
                 </div>
 
-                <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
-                  <span className="text-[11px] font-medium text-slate-400 uppercase">
+                <div className="bg-[#000c33]/80 p-3.5 rounded-xl border border-[#0d349e]">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                     Total Abonado Real
                   </span>
-                  <p className="text-xl font-bold text-emerald-400 mt-1">
+                  <p className="text-xl font-black text-[#FEB135] mt-1">
                     {formatUSD(fin.totalPaid)}
                   </p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">
+                  <p className="text-[10px] text-slate-400 mt-0.5">
                     {targetFee > 0
                       ? `${Math.round((fin.totalPaid / targetFee) * 100)}% de la meta`
                       : '0%'}
                   </p>
                 </div>
 
-                <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
-                  <span className="text-[11px] font-medium text-slate-400 uppercase">
+                <div className="bg-[#000c33]/80 p-3.5 rounded-xl border border-[#0d349e]">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                     Saldo Restante
                   </span>
-                  <p className="text-xl font-bold text-slate-200 mt-1">
+                  <p className="text-xl font-black text-slate-200 mt-1">
                     {formatUSD(remainingFee)}
                   </p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Por recaudar</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Por recaudar</p>
                 </div>
 
                 <div
                   className={`p-3.5 rounded-xl border ${
                     data.financialStatusSheet === 'Adeuda' || fin.isOverdue
-                      ? 'bg-red-950/40 border-red-800/60'
-                      : 'bg-emerald-950/30 border-emerald-800/50'
+                      ? 'bg-red-950/70 border-red-700'
+                      : 'bg-[#000c33]/80 border-[#0d349e]'
                   }`}
                 >
-                  <span className="text-[11px] font-medium uppercase text-slate-400">
+                  <span className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">
                     Situación en Planilla
                   </span>
                   <div className="flex items-center gap-1.5 mt-1">
-                    <span className="text-base font-bold text-white">
+                    <span className="text-base font-black text-white">
                       {data.financialStatusSheet || (fin.isFullyPaid ? 'Total Pagado' : 'Al Día')}
                     </span>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
+                  <p className="text-[10px] text-slate-300 mt-0.5">
                     {data.debtToDateUSD && data.debtToDateUSD > 0
                       ? `Deuda a fecha: ${formatUSD(data.debtToDateUSD)}`
                       : 'Sin deudas vencidas'}
@@ -328,54 +353,103 @@ export function ParticipantDetailModal({
 
               {/* Fee Information & Calendar */}
               {(data.feeType || data.calendarUrl || data.overpaymentUSD > 0) && (
-                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase">
-                      Modalidad de Inscripción
-                    </span>
-                    <p className="text-slate-200 font-medium text-sm">
-                      {data.feeEnrollmentType || data.feeType || 'Estándar'}
-                    </p>
-                    {data.overpaymentUSD > 0 && (
-                      <p className="text-indigo-400 text-xs mt-0.5 font-semibold">
-                        Sobrepago registrado: {formatUSD(data.overpaymentUSD)}
+                <div className="space-y-3">
+                  <div className="bg-[#000c33]/70 border border-[#0d349e] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Modalidad de Inscripción
+                      </span>
+                      <p className="text-white font-bold text-sm">
+                        {data.feeEnrollmentType || data.feeType || 'Estándar'}
                       </p>
+                      {data.overpaymentUSD > 0 && (
+                        <p className="text-[#FEB135] text-xs mt-0.5 font-bold">
+                          Sobrepago registrado: {formatUSD(data.overpaymentUSD)}
+                        </p>
+                      )}
+                    </div>
+                    {data.calendarUrl && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowCalendarPreview(!showCalendarPreview)}
+                          className="px-3.5 py-1.5 bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] rounded-lg text-xs font-black flex items-center gap-1.5 shadow-sm cursor-pointer transition-colors"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                          {showCalendarPreview ? 'Ocultar Calendario' : 'Ver Calendario Oficial'}
+                        </button>
+                        <a
+                          href={data.calendarUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 bg-[#001558] hover:bg-[#031c6a] text-slate-300 hover:text-white rounded-lg border border-[#0d349e] transition-colors"
+                          title="Abrir imagen local en pestaña nueva"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
                     )}
                   </div>
-                  {data.calendarUrl && (
-                    <a
-                      href={data.calendarUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 rounded-lg text-xs font-medium flex items-center gap-1.5 border border-slate-700 shrink-0 w-fit"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      Ver Calendario Oficial de Cuotas
-                    </a>
+
+                  {showCalendarPreview && data.calendarUrl && (
+                    <div className="bg-[#000c33] border border-[#FEB135]/40 rounded-xl p-4 animate-in fade-in zoom-in-95 duration-150">
+                      <div className="flex justify-between items-center mb-3 pb-2 border-b border-[#0d349e]">
+                        <span className="text-xs font-bold text-[#FEB135] flex items-center gap-1.5">
+                          <Calendar className="w-4 h-4" />
+                          Calendario Oficial de Cuotas ({data.feeEnrollmentType || data.feeType || 'Participante'})
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={data.calendarUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-[#FEB135] hover:underline flex items-center gap-1 mr-2"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Pantalla completa
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setShowCalendarPreview(false)}
+                            className="text-slate-400 hover:text-white text-xs px-2 py-0.5 rounded bg-[#001558] cursor-pointer"
+                          >
+                            Cerrar ✕
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex justify-center p-2 bg-[#001558]/40 rounded-lg border border-[#0d349e]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={data.calendarUrl}
+                          alt="Calendario de Cuotas Oficial"
+                          className="max-h-96 w-auto rounded object-contain shadow-lg"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
 
               {/* Form to Register New Payment */}
-              <div className="bg-slate-950/80 border border-indigo-900/40 rounded-xl p-4 shadow-inner">
-                <h3 className="text-xs font-semibold text-indigo-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <PlusCircle className="w-4 h-4 text-indigo-400" />
+              <div className="bg-[#000c33]/90 border border-[#0d349e] rounded-xl p-4 shadow-inner">
+                <h3 className="text-xs font-bold text-[#FEB135] uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <PlusCircle className="w-4 h-4 text-[#FEB135]" />
                   Registrar Nuevo Abono / Pago Bancario
                 </h3>
 
                 {paymentError && (
-                  <div className="mb-3 p-2.5 rounded-lg bg-red-950/60 border border-red-800 text-red-300 text-xs">
+                  <div className="mb-3 p-2.5 rounded-lg bg-red-950/80 border border-red-700 text-red-200 text-xs">
                     {paymentError}
                   </div>
                 )}
 
                 <form onSubmit={handleRegisterPayment} className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Monto Abono (USD)*
                     </label>
                     <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center text-slate-500 font-bold">
+                      <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center text-slate-400 font-bold">
                         $
                       </span>
                       <input
@@ -385,13 +459,13 @@ export function ParticipantDetailModal({
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
                         placeholder="150.00"
-                        className="w-full pl-6 pr-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                        className="w-full pl-6 pr-2 py-2 bg-[#001558] border border-[#0d349e] rounded-lg text-white font-mono text-xs focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Fecha del Pago*
                     </label>
                     <input
@@ -399,18 +473,18 @@ export function ParticipantDetailModal({
                       required
                       value={paymentDate}
                       onChange={(e) => setPaymentDate(e.target.value)}
-                      className="w-full px-2.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                      className="w-full px-2.5 py-2 bg-[#001558] border border-[#0d349e] rounded-lg text-white text-xs focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Método de Pago
                     </label>
                     <select
                       value={paymentMethod}
                       onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="w-full px-2.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                      className="w-full px-2.5 py-2 bg-[#001558] border border-[#0d349e] rounded-lg text-white text-xs focus:ring-2 focus:ring-[#FEB135] focus:outline-none font-medium"
                     >
                       <option value="TRANSFERENCIA">Transferencia Bancaria</option>
                       <option value="TARJETA">Tarjeta / Webpay</option>
@@ -420,7 +494,7 @@ export function ParticipantDetailModal({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       N° Operación / Transf.
                     </label>
                     <input
@@ -428,12 +502,12 @@ export function ParticipantDetailModal({
                       value={transactionReference}
                       onChange={(e) => setTransactionReference(e.target.value)}
                       placeholder="Ej: 546936"
-                      className="w-full px-2.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                      className="w-full px-2.5 py-2 bg-[#001558] border border-[#0d349e] rounded-lg text-white text-xs focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                     />
                   </div>
 
                   <div className="sm:col-span-3">
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
                       Notas / Observaciones
                     </label>
                     <input
@@ -441,7 +515,7 @@ export function ParticipantDetailModal({
                       value={paymentNotes}
                       onChange={(e) => setPaymentNotes(e.target.value)}
                       placeholder="Observaciones de comprobante bancario"
-                      className="w-full px-2.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                      className="w-full px-2.5 py-2 bg-[#001558] border border-[#0d349e] rounded-lg text-white text-xs focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                     />
                   </div>
 
@@ -449,7 +523,7 @@ export function ParticipantDetailModal({
                     <button
                       type="submit"
                       disabled={submittingPayment}
-                      className="w-full py-2 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50 cursor-pointer"
+                      className="w-full py-2 px-4 rounded-lg bg-[#FEB135] hover:bg-[#e59c22] active:bg-[#cc8610] text-[#001558] font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#FEB135]/20 disabled:opacity-50 cursor-pointer uppercase tracking-wider"
                     >
                       {submittingPayment ? (
                         <>
@@ -469,13 +543,13 @@ export function ParticipantDetailModal({
 
               {/* Payments History List */}
               <div>
-                <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-[#FEB135]" />
                   Historial de Abonos Registrados ({data.payments?.length || 0})
                 </h3>
 
                 {(!data.payments || data.payments.length === 0) ? (
-                  <div className="bg-slate-950/40 rounded-xl p-4 text-center border border-slate-800 text-xs text-slate-500">
+                  <div className="bg-[#000c33]/40 rounded-xl p-4 text-center border border-[#0d349e] text-xs text-slate-400">
                     No se han registrado abonos para este participante aún.
                   </div>
                 ) : (
@@ -483,27 +557,27 @@ export function ParticipantDetailModal({
                     {data.payments.map((p: any) => (
                       <div
                         key={p.id}
-                        className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between hover:border-slate-700 transition-colors"
+                        className="bg-[#000c33]/80 border border-[#0d349e] rounded-xl p-3 flex items-center justify-between hover:border-[#FEB135]/40 transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-950/80 border border-emerald-700/40 text-emerald-400 flex items-center justify-center font-bold text-xs">
+                          <div className="w-8 h-8 rounded-lg bg-[#001558] border border-[#FEB135]/40 text-[#FEB135] flex items-center justify-center font-black text-xs">
                             $
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-emerald-400 text-sm font-mono">
+                              <span className="font-black text-[#FEB135] text-sm font-mono">
                                 +{formatUSD(p.amount)}
                               </span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#001558] text-slate-200 font-semibold border border-[#0d349e]">
                                 {p.paymentMethod}
                               </span>
                               {p.transactionReference && (
-                                <span className="text-[10px] font-mono text-indigo-300 bg-indigo-950/70 px-1.5 py-0.5 rounded border border-indigo-800/40">
+                                <span className="text-[10px] font-mono text-[#FEB135] bg-[#001558] px-1.5 py-0.5 rounded border border-[#0d349e]">
                                   Doc: {p.transactionReference}
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                            <div className="flex items-center gap-2 text-[11px] text-slate-300 mt-0.5">
                               <span>
                                 {new Date(p.paymentDate).toLocaleDateString('es-CL', {
                                   year: 'numeric',
@@ -520,7 +594,7 @@ export function ParticipantDetailModal({
                           onClick={() => handleDeletePayment(p.id)}
                           disabled={deletingPaymentId === p.id}
                           title="Anular abono"
-                          className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors cursor-pointer"
+                          className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
                         >
                           {deletingPaymentId === p.id ? (
                             <Loader2 className="w-4 h-4 animate-spin text-red-400" />
@@ -539,100 +613,100 @@ export function ParticipantDetailModal({
           {activeTab === 'profile' && (
             <div className="space-y-4">
               {/* Personal Data */}
-              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4">
-                <h3 className="text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <div className="bg-[#000c33]/70 border border-[#0d349e] rounded-xl p-4">
+                <h3 className="text-xs font-bold text-[#FEB135] uppercase tracking-wider mb-3 flex items-center gap-2">
                   <User className="w-4 h-4" />
                   Datos Personales
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <span className="text-slate-500 block">RUT</span>
-                    <span className="font-mono text-slate-200 font-semibold">{data.rut}</span>
+                    <span className="text-slate-400 block text-[11px]">RUT</span>
+                    <span className="font-mono text-white font-bold">{data.rut}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Nombres y Apellidos</span>
-                    <span className="text-slate-200 font-semibold">
+                    <span className="text-slate-400 block text-[11px]">Nombres y Apellidos</span>
+                    <span className="text-white font-bold">
                       {data.firstName} {data.lastName} {data.secondLastName || ''}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Correo Electrónico</span>
-                    <span className="text-slate-200 flex items-center gap-1">
+                    <span className="text-slate-400 block text-[11px]">Correo Electrónico</span>
+                    <span className="text-slate-200 flex items-center gap-1 font-medium">
                       <Mail className="w-3 h-3 text-slate-400" /> {data.email}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Teléfono / WhatsApp</span>
-                    <span className="text-slate-200 flex items-center gap-1">
+                    <span className="text-slate-400 block text-[11px]">Teléfono / WhatsApp</span>
+                    <span className="text-slate-200 flex items-center gap-1 font-medium">
                       <Phone className="w-3 h-3 text-slate-400" /> {data.phone || 'No registrado'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Fecha de Nacimiento</span>
-                    <span className="text-slate-200">
+                    <span className="text-slate-400 block text-[11px]">Fecha de Nacimiento</span>
+                    <span className="text-slate-200 font-medium">
                       {data.birthDate
                         ? new Date(data.birthDate).toLocaleDateString('es-CL')
                         : 'No registrada'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Género</span>
-                    <span className="text-slate-200">{data.gender || 'No registrado'}</span>
+                    <span className="text-slate-400 block text-[11px]">Género</span>
+                    <span className="text-slate-200 font-medium">{data.gender || 'No registrado'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Dirección</span>
-                    <span className="text-slate-200">{data.address || 'No registrada'}</span>
+                    <span className="text-slate-400 block text-[11px]">Dirección</span>
+                    <span className="text-slate-200 font-medium">{data.address || 'No registrada'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Comuna / Ciudad</span>
-                    <span className="text-slate-200">
+                    <span className="text-slate-400 block text-[11px]">Comuna / Ciudad</span>
+                    <span className="text-slate-200 font-medium">
                       {data.commune ? `${data.commune}` : ''}
                       {data.city ? ` - ${data.city}` : ''}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Nacionalidad</span>
-                    <span className="text-slate-200">{data.nationality || 'Chilena'}</span>
+                    <span className="text-slate-400 block text-[11px]">Nacionalidad</span>
+                    <span className="text-slate-200 font-medium">{data.nationality || 'Chilena'}</span>
                   </div>
                 </div>
 
                 {data.idCardUrl && (
-                  <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between">
-                    <span className="text-slate-400">Cédula de Identidad subida:</span>
+                  <div className="mt-3 pt-3 border-t border-[#0d349e] flex items-center justify-between">
+                    <span className="text-slate-300 font-medium">Cédula de Identidad en Google Drive:</span>
                     <a
                       href={data.idCardUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-3 py-1 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 rounded-lg text-xs font-medium border border-indigo-700/50 flex items-center gap-1"
+                      className="px-3 py-1.5 bg-[#001558] hover:bg-[#031c6a] text-[#FEB135] rounded-lg text-xs font-bold border border-[#FEB135]/40 flex items-center gap-1.5"
                     >
                       <ExternalLink className="w-3 h-3" />
-                      Ver Cédula en Drive
+                      Ver Cédula Digital
                     </a>
                   </div>
                 )}
               </div>
 
               {/* Guardian Info */}
-              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4">
-                <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <div className="bg-[#000c33]/70 border border-[#0d349e] rounded-xl p-4">
+                <h3 className="text-xs font-bold text-[#FEB135] uppercase tracking-wider mb-3 flex items-center gap-2">
                   <Phone className="w-4 h-4" />
                   Apoderado / Contacto de Emergencia
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <span className="text-slate-500 block">Nombre del Apoderado</span>
-                    <span className="text-slate-200 font-medium">
+                    <span className="text-slate-400 block text-[11px]">Nombre del Apoderado</span>
+                    <span className="text-white font-bold">
                       {data.guardianName || 'No registrado'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Teléfono Apoderado</span>
+                    <span className="text-slate-400 block text-[11px]">Teléfono Apoderado</span>
                     <span className="text-slate-200 font-medium">
                       {data.guardianPhone || 'No registrado'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Correo Apoderado</span>
+                    <span className="text-slate-400 block text-[11px]">Correo Apoderado</span>
                     <span className="text-slate-200 font-medium">
                       {data.guardianEmail || 'No registrado'}
                     </span>
@@ -642,8 +716,8 @@ export function ParticipantDetailModal({
 
               {/* Previous Events */}
               {data.previousEvents && (
-                <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4">
-                  <h3 className="text-xs font-semibold text-cyan-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                <div className="bg-[#000c33]/70 border border-[#0d349e] rounded-xl p-4">
+                  <h3 className="text-xs font-bold text-cyan-300 uppercase tracking-wider mb-2 flex items-center gap-2">
                     <Award className="w-4 h-4" />
                     Eventos Anteriores
                   </h3>
@@ -656,45 +730,45 @@ export function ParticipantDetailModal({
           {activeTab === 'logistics' && (
             <div className="space-y-4">
               {/* Contingent and Unit Allocation */}
-              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4">
-                <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <div className="bg-[#000c33]/70 border border-[#0d349e] rounded-xl p-4">
+                <h3 className="text-xs font-bold text-[#FEB135] uppercase tracking-wider mb-3 flex items-center gap-2">
                   <Tent className="w-4 h-4" />
                   Asignación en Contingente Polonia 2027
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <span className="text-slate-500 block">Código Único de Cupo</span>
-                    <span className="font-mono text-indigo-400 font-bold text-sm">
+                    <span className="text-slate-400 block text-[11px]">Código Único de Cupo</span>
+                    <span className="font-mono text-[#FEB135] font-black text-sm">
                       {data.cupoCode || 'Sin cupo asignado'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Territorio (Macro-zona)</span>
-                    <span className="text-slate-200 font-semibold">
+                    <span className="text-slate-400 block text-[11px]">Territorio (Macro-zona)</span>
+                    <span className="text-white font-bold">
                       {data.territorium || 'Por asignar'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Talla de Indumentaria / Kit</span>
-                    <span className="text-emerald-400 font-bold">
+                    <span className="text-slate-400 block text-[11px]">Talla de Indumentaria / Kit</span>
+                    <span className="text-[#FEB135] font-black text-sm">
                       {data.uniformSize || 'No registrada'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Unidad de Contingente</span>
-                    <span className="text-slate-200 font-medium">
+                    <span className="text-slate-400 block text-[11px]">Unidad de Contingente</span>
+                    <span className="text-white font-bold">
                       {data.unitName || data.unit || 'Por asignar'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Patrulla de Contingente</span>
-                    <span className="text-slate-200 font-medium">
+                    <span className="text-slate-400 block text-[11px]">Patrulla de Contingente</span>
+                    <span className="text-white font-bold">
                       {data.patrolName || data.patrol || 'Por asignar'}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Registro Oficial en Polonia</span>
-                    <span className="text-slate-200 font-medium">
+                    <span className="text-slate-400 block text-[11px]">Registro Oficial en Polonia</span>
+                    <span className="text-slate-200 font-bold">
                       {data.polandRegistered || 'En proceso'}
                     </span>
                   </div>
@@ -702,39 +776,39 @@ export function ParticipantDetailModal({
               </div>
 
               {/* Scout Structure */}
-              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4">
-                <h3 className="text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Shield className="w-4 h-4" />
+              <div className="bg-[#000c33]/70 border border-[#0d349e] rounded-xl p-4">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-[#FEB135]" />
                   Afiliación Institucional AGSCH
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <span className="text-slate-500 block">Zona Scout</span>
-                    <span className="text-slate-200 font-medium">{data.scoutZone || 'Sin asignar'}</span>
+                    <span className="text-slate-400 block text-[11px]">Zona Scout</span>
+                    <span className="text-white font-bold">{data.scoutZone || 'Sin asignar'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Distrito Scout</span>
-                    <span className="text-slate-200 font-medium">{data.scoutDistrict || 'Sin asignar'}</span>
+                    <span className="text-slate-400 block text-[11px]">Distrito Scout</span>
+                    <span className="text-white font-bold">{data.scoutDistrict || 'Sin asignar'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Grupo Guía y Scout</span>
-                    <span className="text-slate-200 font-medium">{data.scoutGroup || 'Sin asignar'}</span>
+                    <span className="text-slate-400 block text-[11px]">Grupo Guía y Scout</span>
+                    <span className="text-white font-bold">{data.scoutGroup || 'Sin asignar'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Rol Actual en el Grupo</span>
-                    <span className="text-slate-200">{data.scoutCurrentRole || 'No especificado'}</span>
+                    <span className="text-slate-400 block text-[11px]">Cargo Actual en el Grupo</span>
+                    <span className="text-slate-200 font-medium">{data.scoutCurrentRole || 'No especificado'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Nivel de Formación</span>
-                    <span className="text-slate-200">{data.scoutTrainingLevel || 'Sin nivel'}</span>
+                    <span className="text-slate-400 block text-[11px]">Nivel de Formación</span>
+                    <span className="text-slate-200 font-medium">{data.scoutTrainingLevel || 'Sin nivel'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block">Registro Nacional Vigente</span>
-                    <span className="text-slate-200">{data.activeRegistrations || 'No registrado'}</span>
+                    <span className="text-slate-400 block text-[11px]">Registro Nacional Vigente</span>
+                    <span className="text-slate-200 font-medium">{data.activeRegistrations || 'No registrado'}</span>
                   </div>
-                  <div className="sm:col-span-3 pt-2 border-t border-slate-800">
-                    <span className="text-slate-500 block">Contacto de Guiadora / Dirigente a cargo:</span>
-                    <p className="text-slate-300 mt-0.5">
+                  <div className="sm:col-span-3 pt-2 border-t border-[#0d349e]">
+                    <span className="text-slate-400 block text-[11px]">Contacto de Guiadora / Dirigente a cargo:</span>
+                    <p className="text-slate-200 font-medium mt-0.5">
                       {data.groupLeaderName || 'No indicado'}
                       {data.groupLeaderEmail ? ` • ${data.groupLeaderEmail}` : ''}
                       {data.groupLeaderPhone ? ` • ${data.groupLeaderPhone}` : ''}
@@ -744,13 +818,206 @@ export function ParticipantDetailModal({
               </div>
             </div>
           )}
+
+          {/* Tab 4: Ficha Médica WSJ 2027 */}
+          {activeTab === 'medical' && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              {/* Banner de estado y acciones rápidas */}
+              <div className="bg-[#000c33]/80 border border-[#0d349e] rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-red-950/80 border border-red-700/60 text-red-400 flex items-center justify-center shrink-0">
+                    <Heart className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-white text-sm">Ficha Médica Polonia 2027</h3>
+                      {data.medicalRecord?.completionStatus === 'COMPLETED' ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700">
+                          ✓ Completada y Traducida
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-700">
+                          ⏳ Pendiente de Llenar
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-300">
+                      {data.medicalRecord?.completionStatus === 'COMPLETED'
+                        ? `Declarada por ${data.medicalRecord.declaredByName || 'Apoderado'} el ${data.medicalRecord.declaredAt ? new Date(data.medicalRecord.declaredAt).toLocaleDateString() : 'recientemente'}`
+                        : 'El apoderado o participante aún no completa la ficha médica oficial'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = typeof window !== 'undefined' ? `${window.location.origin}/ficha-medica` : '/ficha-medica';
+                      const text = `Hola, te enviamos el enlace para completar la Ficha Médica Oficial del Contingente Chileno para el 26° Jamboree Scout Mundial Polonia 2027 de ${data.firstName}. Ingresa con el RUT ${data.rut} aquí: ${url}`;
+                      navigator.clipboard.writeText(text);
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 3000);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-[#001558] hover:bg-[#031c6a] text-[#FEB135] text-xs font-bold border border-[#FEB135]/40 flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    {copiedLink ? '¡Mensaje Copiado!' : 'Copiar Enlace WhatsApp'}
+                  </button>
+
+                  {data.medicalRecord?.qrAccessCode ? (
+                    <a
+                      href={`/medico/${data.medicalRecord.qrAccessCode}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] text-xs font-black flex items-center gap-1.5 shadow-sm"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Ver QR de Emergencia
+                    </a>
+                  ) : (
+                    <a
+                      href={`/ficha-medica`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] text-xs font-black flex items-center gap-1.5 shadow-sm"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Llenar Ficha Ahora
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Si tiene ficha médica cargada */}
+              {data.medicalRecord ? (
+                <>
+                  {/* Selector de idioma */}
+                  <div className="flex items-center justify-between border-b border-[#0d349e] pb-2">
+                    <div className="flex bg-[#000c33] border border-[#0d349e] rounded-lg p-1 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setMedLang('es')}
+                        className={`px-3 py-1 rounded transition-all ${
+                          medLang === 'es' ? 'bg-[#FEB135] text-[#001558]' : 'text-slate-300'
+                        }`}
+                      >
+                        🇨🇱 Español
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMedLang('en')}
+                        className={`px-3 py-1 rounded transition-all ${
+                          medLang === 'en' ? 'bg-[#FEB135] text-[#001558]' : 'text-slate-300'
+                        }`}
+                      >
+                        🇬🇧 English (Medical)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMedLang('pl')}
+                        className={`px-3 py-1 rounded transition-all ${
+                          medLang === 'pl' ? 'bg-[#FEB135] text-[#001558]' : 'text-slate-300'
+                        }`}
+                      >
+                        🇵🇱 Polski (Medyczny)
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="font-bold text-[#FEB135] flex items-center gap-1">
+                        <Droplet className="w-3.5 h-3.5 text-red-400" />
+                        Grupo Sanguíneo: {data.medicalRecord.bloodType || 'No informado'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Resumen clínico en el idioma seleccionado */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="bg-[#000c33]/70 border border-[#0d349e] rounded-xl p-3 space-y-1">
+                      <span className="text-[10px] font-bold text-red-300 uppercase flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 text-red-400" />
+                        {medLang === 'en' ? 'Allergies & Anaphylaxis' : medLang === 'pl' ? 'Alergie i Anafilaksja' : 'Alergias y Anafilaxia'}
+                      </span>
+                      <p className="text-white font-medium">
+                        {medLang === 'en'
+                          ? data.medicalRecord.allergiesEN || 'None reported'
+                          : medLang === 'pl'
+                          ? data.medicalRecord.allergiesPL || 'Brak'
+                          : data.medicalRecord.allergiesES || 'Sin alergias registradas'}
+                      </p>
+                    </div>
+
+                    <div className="bg-[#000c33]/70 border border-[#0d349e] rounded-xl p-3 space-y-1">
+                      <span className="text-[10px] font-bold text-[#FEB135] uppercase flex items-center gap-1">
+                        <Heart className="w-3 h-3 text-[#FEB135]" />
+                        {medLang === 'en' ? 'Chronic Conditions' : medLang === 'pl' ? 'Choroby Przewlekłe' : 'Condiciones Crónicas'}
+                      </span>
+                      <p className="text-white font-medium">
+                        {medLang === 'en'
+                          ? data.medicalRecord.chronicConditionsEN || 'None reported'
+                          : medLang === 'pl'
+                          ? data.medicalRecord.chronicConditionsPL || 'Brak'
+                          : data.medicalRecord.chronicConditionsES || 'Sin condiciones crónicas'}
+                      </p>
+                    </div>
+
+                    <div className="bg-[#000c33]/70 border border-[#0d349e] rounded-xl p-3 space-y-1">
+                      <span className="text-[10px] font-bold text-indigo-300 uppercase flex items-center gap-1">
+                        <Pill className="w-3 h-3 text-indigo-400" />
+                        {medLang === 'en' ? 'Medications' : medLang === 'pl' ? 'Leki' : 'Medicamentos Habituales'}
+                      </span>
+                      <p className="text-white font-medium">
+                        {medLang === 'en'
+                          ? data.medicalRecord.currentMedicationsEN || 'None'
+                          : medLang === 'pl'
+                          ? data.medicalRecord.currentMedicationsPL || 'Brak'
+                          : data.medicalRecord.currentMedicationsES || 'Sin medicamentos habituales'}
+                      </p>
+                    </div>
+
+                    <div className="bg-[#000c33]/70 border border-[#0d349e] rounded-xl p-3 space-y-1">
+                      <span className="text-[10px] font-bold text-emerald-300 uppercase flex items-center gap-1">
+                        <FileText className="w-3 h-3 text-emerald-400" />
+                        {medLang === 'en' ? 'Dietary Restrictions' : medLang === 'pl' ? 'Dieta' : 'Régimen Alimentario'}
+                      </span>
+                      <p className="text-white font-medium">
+                        {medLang === 'en'
+                          ? data.medicalRecord.dietaryRestrictionsEN || 'Standard'
+                          : medLang === 'pl'
+                          ? data.medicalRecord.dietaryRestrictionsPL || 'Standardowa'
+                          : data.medicalRecord.dietaryRestrictionsES || data.dietaryRestrictions || 'Normal'}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="bg-[#000c33]/60 border border-[#0d349e] rounded-xl p-6 text-center space-y-3">
+                  <Heart className="w-8 h-8 text-slate-500 mx-auto" />
+                  <h4 className="text-sm font-bold text-white">Sin Ficha Médica Registrada Aún</h4>
+                  <p className="text-xs text-slate-300 max-w-md mx-auto">
+                    El apoderado puede ingresar al portal público con el RUT del participante y solicitar su código de verificación al correo para completarla y firmarla digitalmente.
+                  </p>
+                  <a
+                    href="/ficha-medica"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FEB135] text-[#001558] font-black text-xs shadow-md"
+                  >
+                    Abrir Portal Ficha Médica
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-slate-800 flex justify-end bg-slate-950/80">
+        <div className="px-6 py-3 border-t border-[#0d349e] flex justify-end bg-[#000c33]">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-medium transition-colors cursor-pointer"
+            className="px-4 py-2 bg-[#001558] hover:bg-[#031c6a] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer border border-[#0d349e]"
           >
             Cerrar Ficha
           </button>

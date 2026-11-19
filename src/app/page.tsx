@@ -109,14 +109,14 @@ export default function DashboardPage() {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      <div className="min-h-screen bg-[#000c33] flex items-center justify-center text-slate-300">
+        <Loader2 className="w-8 h-8 animate-spin text-[#FEB135]" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#000c33] text-slate-100 flex flex-col font-sans">
       <Navbar user={user} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -144,8 +144,23 @@ export default function DashboardPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950/80 py-4 text-center text-xs text-slate-500">
-        Asociación de Guías y Scouts de Chile • Contingente Nacional al 26° World Scout Jamboree Polonia 2027
+      <footer className="border-t border-[#0d349e] bg-[#001558] py-4 text-center text-xs text-slate-300">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>
+            Asociación de Guías y Scouts de Chile • Contingente Nacional al 26° World Scout Jamboree Polonia 2027
+          </span>
+          <span className="text-[11px] text-slate-400">
+            Diseño e Identidad Visual conforme a{' '}
+            <a
+              href="https://kitdigital.agsch.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#FEB135] hover:underline font-bold"
+            >
+              Kit Digital AGSCH
+            </a>
+          </span>
+        </div>
       </footer>
 
       {/* Modals */}

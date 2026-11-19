@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { Compass, LogOut, User, DollarSign, Shield } from 'lucide-react';
+import Image from 'next/image';
+import { LogOut, User, DollarSign, Compass, Heart } from 'lucide-react';
 
 interface NavbarProps {
   user: {
@@ -27,52 +28,69 @@ export function Navbar({ user }: NavbarProps) {
   };
 
   return (
-    <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 text-white">
+    <header className="sticky top-0 z-30 bg-[#001558] border-b border-[#0d349e] text-white shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Brand */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-700 via-indigo-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-600/30 border border-indigo-400/30">
-              <Compass className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between h-16 sm:h-20">
+          {/* Brand Logo & Event Details */}
+          <div className="flex items-center gap-4">
+            <div className="relative w-44 sm:w-56 h-12 sm:h-14">
+              <Image
+                src="/agsch-logo-white.svg"
+                alt="Guías y Scouts de Chile"
+                fill
+                priority
+                className="object-contain object-left"
+              />
             </div>
-            <div>
+            <div className="hidden md:block pl-4 border-l border-[#0d349e]">
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent">
-                  AGSCH • Polonia 2027
+                <span className="font-extrabold text-sm sm:text-base tracking-tight text-white">
+                  Polonia 2027
                 </span>
-                <span className="hidden sm:inline-flex px-2 py-0.5 text-[10px] font-bold rounded-md bg-indigo-950 text-indigo-300 border border-indigo-700/50">
-                  26th World Scout Jamboree
+                <span className="px-2 py-0.5 text-[10px] font-black rounded-md bg-[#FEB135] text-[#001558] uppercase">
+                  Contingente Oficial
                 </span>
               </div>
-              <p className="text-xs text-slate-400 hidden sm:block">
-                Contingente Nacional Guías y Scouts de Chile • Mini CRM de Gestión
+              <p className="text-[11px] text-slate-300">
+                26° World Scout Jamboree • Gdańsk
               </p>
             </div>
           </div>
 
-          {/* Right section: Badge & User info */}
+          {/* Right section: Medical Portal, USD Badge & User Account */}
           <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-600/30 text-emerald-400 text-xs font-semibold">
+            <a
+              href="/ficha-medica"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#000c33] border border-red-500/50 hover:border-red-400 text-red-200 text-xs font-bold transition-colors"
+              title="Abrir portal de Ficha Médica Oficial"
+            >
+              <Heart className="w-3.5 h-3.5 text-red-400" />
+              <span>Ficha Médica WSJ</span>
+            </a>
+
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#000c33] border border-[#FEB135]/40 text-[#FEB135] text-xs font-bold">
               <DollarSign className="w-3.5 h-3.5" />
-              <span>Moneda Base: USD</span>
+              <span>Base Oficial: USD</span>
             </div>
 
             {user && (
-              <div className="flex items-center gap-3 pl-3 border-l border-slate-800">
+              <div className="flex items-center gap-3 pl-3 border-l border-[#0d349e]">
                 <div className="flex items-center gap-2 text-right">
-                  <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300">
+                  <div className="w-8 h-8 rounded-lg bg-[#000c33] border border-[#0d349e] flex items-center justify-center text-[#FEB135]">
                     <User className="w-4 h-4" />
                   </div>
                   <div className="hidden lg:block text-left">
-                    <p className="text-xs font-semibold text-slate-200">{user.name}</p>
-                    <p className="text-[10px] text-slate-400 font-mono">{user.email}</p>
+                    <p className="text-xs font-bold text-white">{user.name}</p>
+                    <p className="text-[10px] text-slate-300 font-mono">{user.email}</p>
                   </div>
                 </div>
 
                 <button
                   onClick={handleLogout}
                   title="Cerrar sesión"
-                  className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/40 border border-transparent hover:border-red-800/40 transition-colors cursor-pointer"
+                  className="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-red-950/60 border border-transparent hover:border-red-700/50 transition-colors cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>

@@ -118,9 +118,107 @@ model Participant {
   plan                 PaymentPlan?  @relation(fields: [planId], references: [id], onDelete: SetNull)
   payments             Payment[]
 
+  // Ficha Médica WSJ
+  medicalRecord        MedicalRecord?
+
   notes                String?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
+}
+
+model MedicalRecord {
+  id                                String      @id @default(cuid())
+  participantId                     String      @unique
+  participant                       Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  qrAccessCode                      String      @unique @default(cuid()) // Token público para acceso médico de emergencia por QR
+
+  // Datos biométricos y tipo de sangre
+  bloodType                         String?     // O+, O-, A+, A-, B+, B-, AB+, AB-
+  heightCm                          Float?
+  weightKg                          Float?
+
+  // Contacto de Emergencia
+  emergencyContactName              String?
+  emergencyContactPhone             String?
+  emergencyContactRelation          String?
+  emergencyContactEmail             String?
+
+  // Seguro Médico Internacional de Viaje
+  insuranceCompany                  String?
+  insurancePolicyNumber             String?
+  insuranceEmergencyPhone           String?
+
+  // Alergias
+  hasSevereAllergies                Boolean     @default(false)
+  carriesEpiPen                     Boolean     @default(false)
+  allergiesES                       String?
+  allergiesEN                       String?
+  allergiesPL                       String?
+
+  // Condiciones Médicas / Enfermedades Crónicas
+  hasChronicConditions              Boolean     @default(false)
+  chronicConditionsES               String?
+  chronicConditionsEN               String?
+  chronicConditionsPL               String?
+
+  // Medicación habitual
+  takesRegularMedication            Boolean     @default(false)
+  requiresColdChainMedication       Boolean     @default(false)
+  currentMedicationsES              String?
+  currentMedicationsEN              String?
+  currentMedicationsPL              String?
+
+  // Restricciones Dietarias / Intolerancias
+  dietaryRestrictionsES            String?
+  dietaryRestrictionsEN            String?
+  dietaryRestrictionsPL            String?
+
+  // Vacunación
+  tetanusLastDoseYear               String?
+  vaccinationRecordsES              String?
+  vaccinationRecordsEN              String?
+  vaccinationRecordsPL              String?
+
+  // Cirugías, Traumatismos y Antecedentes
+  pastSurgeriesInjuriesES            String?
+  pastSurgeriesInjuriesEN            String?
+  pastSurgeriesInjuriesPL            String?
+
+  // Dispositivos Médicos / Ópticos / Auditivos
+  devicesImplantsES                 String?
+  devicesImplantsEN                 String?
+  devicesImplantsPL                 String?
+
+  // Limitaciones para actividades físicas / acuáticas en campamento
+  physicalLimitationsES             String?
+  physicalLimitationsEN             String?
+  physicalLimitationsPL             String?
+
+  // Declaración y Consentimiento de Emergencia en Polonia
+  emergencyTreatmentConsent         Boolean     @default(false)
+  declaredByName                    String?
+  declaredByRut                     String?
+  declaredByRole                    String?     // APODERADO / PARTICIPANTE_ADULTO
+  declaredAt                        DateTime?
+
+  completionStatus                  String      @default("PENDING") // PENDING, COMPLETED, VERIFIED
+  lastUpdatedIp                     String?
+
+  createdAt                         DateTime    @default(now())
+  updatedAt                         DateTime    @updatedAt
+}
+
+model MedicalVerificationCode {
+  id            String    @id @default(cuid())
+  participantId String
+  email         String
+  code          String    // Código OTP de 6 dígitos
+  expiresAt     DateTime
+  usedAt        DateTime?
+  ipAddress     String?
+  createdAt     DateTime  @default(now())
+
+  @@index([participantId, email])
 }
 
 model Payment {

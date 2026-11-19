@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, UserPlus, Save, Loader2, AlertCircle } from 'lucide-react';
 import { formatRut, cleanRut, validateRut } from '@/lib/rut';
 
@@ -20,29 +20,32 @@ export function ParticipantFormModal({
   const [rut, setRut] = useState(initialData?.rut || '');
   const [firstName, setFirstName] = useState(initialData?.firstName || '');
   const [lastName, setLastName] = useState(initialData?.lastName || '');
+  const [secondLastName, setSecondLastName] = useState(initialData?.secondLastName || '');
   const [email, setEmail] = useState(initialData?.email || '');
   const [phone, setPhone] = useState(initialData?.phone || '');
   const [birthDate, setBirthDate] = useState(
     initialData?.birthDate ? new Date(initialData.birthDate).toISOString().split('T')[0] : ''
   );
-  const [gender, setGender] = useState(initialData?.gender || 'M');
-  const [contingentRole, setContingentRole] = useState(initialData?.contingentRole || 'JOVEN');
-  const [status, setStatus] = useState(initialData?.status || 'PRE_INSCRITO');
+  const [gender, setGender] = useState(initialData?.gender || 'Masculino');
+  const [contingentRole, setContingentRole] = useState(initialData?.contingentRole || 'Participante');
+  const [status, setStatus] = useState(initialData?.status || 'CONFIRMADO');
   const [scoutZone, setScoutZone] = useState(initialData?.scoutZone || '');
   const [scoutDistrict, setScoutDistrict] = useState(initialData?.scoutDistrict || '');
   const [scoutGroup, setScoutGroup] = useState(initialData?.scoutGroup || '');
-  const [unitOrPatrol, setUnitOrPatrol] = useState(initialData?.unitOrPatrol || '');
+  const [unitName, setUnitName] = useState(initialData?.unitName || initialData?.unit || '');
+  const [patrolName, setPatrolName] = useState(initialData?.patrolName || initialData?.patrol || '');
+  const [cupoCode, setCupoCode] = useState(initialData?.cupoCode || '');
+  const [uniformSize, setUniformSize] = useState(initialData?.uniformSize || '');
 
   // Guardian
   const [guardianName, setGuardianName] = useState(initialData?.guardianName || '');
-  const [guardianRelationship, setGuardianRelationship] = useState(initialData?.guardianRelationship || '');
   const [guardianPhone, setGuardianPhone] = useState(initialData?.guardianPhone || '');
   const [guardianEmail, setGuardianEmail] = useState(initialData?.guardianEmail || '');
 
-  // Medical & notes
-  const [dietaryRestrictions, setDietaryRestrictions] = useState(initialData?.dietaryRestrictions || '');
-  const [medicalNotes, setMedicalNotes] = useState(initialData?.medicalNotes || '');
-  const [notes, setNotes] = useState(initialData?.notes || '');
+  // Address
+  const [address, setAddress] = useState(initialData?.address || '');
+  const [commune, setCommune] = useState(initialData?.commune || '');
+  const [city, setCity] = useState(initialData?.city || '');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,23 +85,26 @@ export function ParticipantFormModal({
           rut,
           firstName,
           lastName,
+          secondLastName,
           email,
           phone,
           birthDate: birthDate || null,
           gender,
+          address,
+          commune,
+          city,
           contingentRole,
           status,
           scoutZone,
           scoutDistrict,
           scoutGroup,
-          unitOrPatrol,
+          unitName,
+          patrolName,
+          cupoCode,
+          uniformSize,
           guardianName,
-          guardianRelationship,
           guardianPhone,
           guardianEmail,
-          dietaryRestrictions,
-          medicalNotes,
-          notes,
         }),
       });
 
@@ -116,35 +122,35 @@ export function ParticipantFormModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-6 overflow-y-auto">
+      <div className="bg-[#001558] border border-[#0d349e] rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div className="px-6 py-4 border-b border-[#0d349e] flex items-center justify-between bg-[#000c33]/70">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-950 border border-indigo-700/50 text-indigo-400 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-[#000c33] border border-[#FEB135]/40 text-[#FEB135] flex items-center justify-center">
               {isEditing ? <Save className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">
-                {isEditing ? 'Editar Datos del Participante' : 'Inscribir Nuevo Participante'}
+              <h2 className="text-base font-black text-white">
+                {isEditing ? 'Editar Ficha Oficial' : 'Inscribir Nuevo Participante'}
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-300">
                 Polonia 2027 • Asociación de Guías y Scouts de Chile
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#000c33] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Body Form */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5 flex-1 text-xs bg-[#001558]">
           {error && (
-            <div className="p-3 rounded-xl bg-red-950/70 border border-red-800/80 text-red-300 flex items-start gap-2">
+            <div className="p-3 rounded-xl bg-red-950/80 border border-red-700 text-red-200 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -152,12 +158,12 @@ export function ParticipantFormModal({
 
           {/* Sección 1: Datos Personales */}
           <div>
-            <h3 className="font-bold text-indigo-300 uppercase tracking-wider mb-2.5">
-              1. Datos Personales
+            <h3 className="font-bold text-[#FEB135] uppercase tracking-wider mb-2.5">
+              1. Datos Personales y Contacto
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">RUT Chileno*</label>
+                <label className="block text-slate-300 mb-1 font-semibold">RUT Chileno*</label>
                 <input
                   type="text"
                   required
@@ -165,266 +171,244 @@ export function ParticipantFormModal({
                   onChange={(e) => setRut(e.target.value)}
                   onBlur={handleRutBlur}
                   placeholder="12.345.678-5"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white font-mono focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Nombres*</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Nombres*</label>
                 <input
                   type="text"
                   required
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="Ej: Sofía Ignacia"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Apellidos*</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Primer Apellido*</label>
                 <input
                   type="text"
                   required
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Ej: Silva Valenzuela"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  placeholder="Ej: Silva"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Correo Electrónico*</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Segundo Apellido</label>
+                <input
+                  type="text"
+                  value={secondLastName}
+                  onChange={(e) => setSecondLastName(e.target.value)}
+                  placeholder="Ej: Valenzuela"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Correo Electrónico*</label>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="sofia@ejemplo.cl"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Teléfono / WhatsApp</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Teléfono / WhatsApp</label>
                 <input
                   type="text"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+56 9 1234 5678"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Fecha de Nacimiento</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Fecha de Nacimiento</label>
                 <input
                   type="date"
                   value={birthDate}
                   onChange={(e) => setBirthDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Género</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Género</label>
                 <select
                   value={gender}
                   onChange={(e) => setGender(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 >
-                  <option value="M">Masculino</option>
-                  <option value="F">Femenino</option>
-                  <option value="OTRO">Otro</option>
+                  <option value="Femenino">Femenino</option>
+                  <option value="Masculino">Masculino</option>
+                  <option value="Otro">Otro</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Rol en Contingente*</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Rol en Contingente*</label>
                 <select
                   value={contingentRole}
                   onChange={(e) => setContingentRole(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-indigo-600/50 rounded-lg text-white font-semibold focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#FEB135]/50 rounded-lg text-[#FEB135] font-bold focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 >
-                  <option value="JOVEN">Participante / Joven ($3,600 USD)</option>
-                  <option value="DIRIGENTE">Educador / Dirigente ($3,300 USD)</option>
-                  <option value="IST">IST Servicio ($2,200 USD)</option>
-                  <option value="CMT">Equipo CMT ($2,200 USD)</option>
+                  <option value="Participante">Joven / Participante</option>
+                  <option value="Responsable de Patrulla">Responsable de Patrulla</option>
+                  <option value="RESPONSABLE">Educador / Dirigente</option>
+                  <option value="IST">IST (Servicio)</option>
+                  <option value="CMT">CMT (Contingente)</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Estado de Inscripción*</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Estado de Inscripción*</label>
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 >
-                  <option value="PRE_INSCRITO">Preinscrito</option>
                   <option value="CONFIRMADO">Confirmado</option>
-                  <option value="LISTA_ESPERA">Lista de Espera</option>
-                  <option value="RETIRADO">Retirado</option>
+                  <option value="PRE_INSCRITO">Preinscrito</option>
+                  <option value="RETIRADO">Baja / Retirado</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Código de Cupo</label>
+                <input
+                  type="text"
+                  value={cupoCode}
+                  onChange={(e) => setCupoCode(e.target.value)}
+                  placeholder="Ej: IST106 o PAR042"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white font-mono focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Talla Indumentaria / Kit</label>
+                <input
+                  type="text"
+                  value={uniformSize}
+                  onChange={(e) => setUniformSize(e.target.value)}
+                  placeholder="Ej: M, L, XL, 44"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
+                />
               </div>
             </div>
           </div>
 
           {/* Sección 2: Afiliación Scout */}
-          <div className="pt-3 border-t border-slate-800">
-            <h3 className="font-bold text-emerald-400 uppercase tracking-wider mb-2.5">
-              2. Afiliación Scout (AGSCH)
+          <div className="pt-3 border-t border-[#0d349e]">
+            <h3 className="font-bold text-[#FEB135] uppercase tracking-wider mb-2.5">
+              2. Afiliación Scout y Asignación
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Zona Scout</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Zona Scout</label>
                 <input
                   type="text"
                   value={scoutZone}
                   onChange={(e) => setScoutZone(e.target.value)}
                   placeholder="Ej: Santiago Oriente"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Distrito Scout</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Distrito Scout</label>
                 <input
                   type="text"
                   value={scoutDistrict}
                   onChange={(e) => setScoutDistrict(e.target.value)}
                   placeholder="Ej: Providencia"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Grupo Guía y Scout</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Grupo Guía y Scout</label>
                 <input
                   type="text"
                   value={scoutGroup}
                   onChange={(e) => setScoutGroup(e.target.value)}
                   placeholder="Ej: Grupo San Jorge"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Unidad / Patrulla</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Unidad de Contingente</label>
                 <input
                   type="text"
-                  value={unitOrPatrol}
-                  onChange={(e) => setUnitOrPatrol(e.target.value)}
+                  value={unitName}
+                  onChange={(e) => setUnitName(e.target.value)}
                   placeholder="Ej: Tropa Cóndor"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 />
               </div>
             </div>
           </div>
 
-          {/* Sección 3: Contacto Apoderado / Emergencia */}
-          <div className="pt-3 border-t border-slate-800">
-            <h3 className="font-bold text-amber-400 uppercase tracking-wider mb-2.5">
-              3. Apoderado / Contacto de Emergencia
+          {/* Sección 3: Contacto Apoderado */}
+          <div className="pt-3 border-t border-[#0d349e]">
+            <h3 className="font-bold text-[#FEB135] uppercase tracking-wider mb-2.5">
+              3. Contacto de Apoderado / Emergencia
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Nombre Apoderado</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Nombre Apoderado</label>
                 <input
                   type="text"
                   value={guardianName}
                   onChange={(e) => setGuardianName(e.target.value)}
                   placeholder="Ej: Marcela Silva"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Parentesco</label>
-                <input
-                  type="text"
-                  value={guardianRelationship}
-                  onChange={(e) => setGuardianRelationship(e.target.value)}
-                  placeholder="Ej: Madre / Padre / Tutor"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1 font-medium">Teléfono Apoderado</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Teléfono Apoderado</label>
                 <input
                   type="text"
                   value={guardianPhone}
                   onChange={(e) => setGuardianPhone(e.target.value)}
                   placeholder="+56 9 9876 5432"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Correo Apoderado</label>
+                <label className="block text-slate-300 mb-1 font-semibold">Correo Apoderado</label>
                 <input
                   type="email"
                   value={guardianEmail}
                   onChange={(e) => setGuardianEmail(e.target.value)}
                   placeholder="marcela@ejemplo.cl"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Sección 4: Dieta y Notas */}
-          <div className="pt-3 border-t border-slate-800">
-            <h3 className="font-bold text-purple-400 uppercase tracking-wider mb-2.5">
-              4. Restricciones y Observaciones
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-slate-400 mb-1 font-medium">
-                  Restricción Alimentaria / Dieta Especial
-                </label>
-                <input
-                  type="text"
-                  value={dietaryRestrictions}
-                  onChange={(e) => setDietaryRestrictions(e.target.value)}
-                  placeholder="Ej: Celíaco, Vegetariano, Alergia a nueces"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1 font-medium">
-                  Notas Médicas Relevantes
-                </label>
-                <input
-                  type="text"
-                  value={medicalNotes}
-                  onChange={(e) => setMedicalNotes(e.target.value)}
-                  placeholder="Ej: Asma leve, medicación de uso diario"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-slate-400 mb-1 font-medium">
-                  Notas Internas de la Organización
-                </label>
-                <textarea
-                  rows={2}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Observaciones de seguimiento o acuerdos con el apoderado"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-[#000c33] border border-[#0d349e] rounded-lg text-white focus:ring-2 focus:ring-[#FEB135] focus:outline-none"
                 />
               </div>
             </div>
           </div>
 
           {/* Submit Actions */}
-          <div className="pt-4 border-t border-slate-800 flex justify-end gap-2.5">
+          <div className="pt-4 border-t border-[#0d349e] flex justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium transition-colors cursor-pointer"
+              className="px-4 py-2 bg-[#000c33] hover:bg-[#031c6a] text-slate-200 rounded-xl font-bold transition-colors cursor-pointer border border-[#0d349e]"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium flex items-center gap-1.5 shadow-md shadow-indigo-600/30 disabled:opacity-50 cursor-pointer transition-all"
+              className="px-5 py-2 bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] rounded-xl font-black flex items-center gap-1.5 shadow-md shadow-[#FEB135]/25 disabled:opacity-50 cursor-pointer transition-all uppercase tracking-wider"
             >
               {loading ? (
                 <>

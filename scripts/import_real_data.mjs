@@ -55,8 +55,8 @@ function parseDate(str) {
 }
 
 function readCsv(filePath) {
-  const buffer = fs.readFileSync(filePath);
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const workbook = XLSX.read(content, { type: 'string' });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   return XLSX.utils.sheet_to_json(sheet, { defval: '' });
 }
@@ -189,7 +189,15 @@ async function main() {
       // Datos financieros de la planilla oficial
       feeType: safeStr(row['TIPO CUOTA']) || null,
       feeEnrollmentType: safeStr(row['TIPO INSCRIPCIÓN']) || null,
-      calendarUrl: safeStr(row['IMAGE_CAL']) || null,
+      calendarUrl: (() => {
+        const raw = safeStr(row['IMAGE_CAL']);
+        if (!raw) return null;
+        if (raw.includes('gruposanagustin.cl/wsj2027cuota/')) {
+          const filename = raw.split('wsj2027cuota/')[1].split('?')[0];
+          return `/calendarios/${filename}`;
+        }
+        return raw;
+      })(),
       totalPaidSheet: parseNum(row['CUOTA PAGADA']),
       targetFeeUSD: parseNum(row['CUOTA FINAL']),
       dueToDateUSD: parseNum(row['CUOTA A FECHA']),

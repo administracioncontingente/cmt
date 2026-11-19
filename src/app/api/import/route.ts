@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const workbook = XLSX.read(buffer, { type: 'buffer', codepage: 65001 });
 
     const firstSheetName = workbook.SheetNames[0];
     if (!firstSheetName) {
