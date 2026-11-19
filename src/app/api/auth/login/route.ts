@@ -58,10 +58,11 @@ export async function POST(req: NextRequest) {
     });
 
     return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in login:', error);
+    const detail = error?.message || 'Error interno del servidor';
     return NextResponse.json(
-      { error: 'Error interno del servidor' },
+      { error: `Error de servidor: ${detail}` },
       { status: 500 }
     );
   }
