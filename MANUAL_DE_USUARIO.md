@@ -6,7 +6,10 @@
 
 ## 📋 Índice
 1. [Introducción y Objetivos](#1-introducción-y-objetivos)
-2. [Perfiles de Acceso y Roles](#2-perfiles-de-acceso-y-roles)
+2. [Arquitectura Multi-Evento y Permisos Granulares](#2-arquitectura-multi-evento-y-permisos-granulares)
+   - [2.1 Selector de Eventos en Tiempo Real](#21-selector-de-eventos-en-tiempo-real)
+   - [2.2 Matriz de Roles y Permisos](#22-matriz-de-roles-y-permisos)
+   - [2.3 Creación de Eventos y Asignación de Equipos](#23-creación-de-eventos-y-asignación-de-equipos)
 3. [Módulo Administrativo (CRM del Contingente)](#3-módulo-administrativo-crm-del-contingente)
    - [3.1 Inicio de Sesión](#31-inicio-de-sesión)
    - [3.2 Dashboard y Estadísticas Financieras](#32-dashboard-y-estadísticas-financieras)
@@ -40,22 +43,30 @@ El **Sistema de Gestión del Contingente AGSCH Polonia 2027** es una plataforma 
 
 ---
 
-## 2. Perfiles de Acceso y Roles
+## 2. Arquitectura Multi-Evento y Permisos Granulares
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        PERFILES DE USUARIOS                            │
-├───────────────────────┬───────────────────────┬────────────────────────┤
-│ Administrador / CMT   │ Apoderado / Scout     │ Equipo Médico (Polonia)│
-├───────────────────────┼───────────────────────┼────────────────────────┤
-│ • Acceso con email y  │ • Acceso vía RUT y    │ • Acceso público vía   │
-│   password a /login   │   correo registrado   │   escaneo de QR        │
-│ • Control financiero  │ • Validación por OTP  │ • Vista rápida tri-    │
-│ • Edición de cupos y  │ • Llenado y firma de  │   lingüe (PL/EN/ES)    │
-│   datos logísticos    │   Ficha Médica WSJ    │ • Alertas de EpiPen y  │
-│ • Exportación Excel   │ • Descarga carnet QR  │   cadena de frío       │
-└───────────────────────┴───────────────────────┴────────────────────────┘
-```
+La plataforma soporta múltiples eventos scouts simultáneos (Jamborees Mundiales, Moots, Paxtu Nacionales, etc.). Cada evento opera de forma aislada e independiente con sus propios participantes, cuotas, moneda (USD, EUR, CLP) y equipo de gestión.
+
+### 2.1 Selector de Eventos en Tiempo Real
+En la barra superior de navegación, el usuario encontrará el **Selector de Eventos**:
+* Muestra la bandera/emoji del evento activo (ej: 🇵🇱 Polonia 2027, 🇵🇹 Portugal 2029, 🇨🇱 Paxtu 2026), su moneda oficial y el rol específico que posee el usuario en dicho evento.
+* Al hacer clic, se despliega la lista de todos los eventos a los que tiene acceso. Con un solo clic cambia de evento y todo el CRM (estadísticas, recaudación, participantes y planes de cuotas) se sincroniza instantáneamente.
+
+### 2.2 Matriz de Roles y Permisos Granulares
+
+| Rol | Alcance | Finanzas y Pagos | Fichas Médicas | Participantes | Gestión de Equipo |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| **`SUPER_ADMIN`** | **Global (Todos los eventos)** | ✅ Total | ✅ Total | ✅ Total | ✅ Crea eventos y asigna equipos |
+| **`EVENT_ADMIN`** | **Evento Específico** | ✅ Total | ✅ Total | ✅ Total | ✅ Asigna miembros a su evento |
+| **`TREASURER`** | **Evento Específico** | ✅ Registro / Conciliación | ❌ Sin acceso clínico | 👁️ Consulta | ❌ |
+| **`MEDICAL_STAFF`** | **Evento Específico** | ❌ | ✅ Fichas, Alergias, EpiPen | 👁️ Consulta | ❌ |
+| **`COORDINATOR`** | **Evento Específico** | ❌ | ❌ | ✅ Edita patrullas / unidades | ❌ |
+| **`VIEWER`** | **Evento Específico** | 👁️ Solo lectura | ❌ | 👁️ Solo lectura | ❌ |
+
+### 2.3 Creación de Eventos y Asignación de Equipos
+Desde el botón **"Administrar Evento y Equipo de Permisos"** en el selector:
+1. **Pestaña "Equipo y Permisos":** Los administradores pueden invitar o asignar usuarios por su correo electrónico, asignándoles su rol específico (`EVENT_ADMIN`, `TREASURER`, `MEDICAL_STAFF`, etc.) y cargo oficial.
+2. **Pestaña "Crear Nuevo Evento":** Exclusivo para `SUPER_ADMIN`. Permite registrar nuevos eventos indicando código único (ej: `JAMBOREE-2031`), nombre, país, moneda de cobro y fechas.
 
 ---
 
