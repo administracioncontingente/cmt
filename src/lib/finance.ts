@@ -40,14 +40,20 @@ export interface FinancialSummary {
   breakdown: InstallmentBreakdown[];
 }
 
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
 /**
  * Resolves the effective target fee amount for a participant.
+ * Explicit 0 (e.g. BAJA or scholarship/exempt) is preserved rather than falling back to the plan total.
  */
 export function resolveParticipantTargetAmount(
   targetFeeUSD?: number | null,
   planTotalAmount?: number | null
 ): number {
-  return targetFeeUSD && targetFeeUSD > 0 ? targetFeeUSD : (planTotalAmount || 3600);
+  if (targetFeeUSD !== null && targetFeeUSD !== undefined) {
+    return targetFeeUSD;
+  }
+  return planTotalAmount ?? 3600;
 }
 
 /**
@@ -62,13 +68,14 @@ export function calculateFinancialSummary(
     (a, b) => a.installmentNumber - b.installmentNumber
   );
 
-  const totalRequired =
+  const totalRequired = round2(
     totalPlanAmountOverride ??
-    sortedInstallments.reduce((sum, item) => sum + item.amount, 0);
+      sortedInstallments.reduce((sum, item) => sum + item.amount, 0)
+  );
 
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-  const balanceRemaining = Math.max(0, totalRequired - totalPaid);
-  const isFullyPaid = totalPaid >= totalRequired && totalRequired > 0;
+  const totalPaid = round2(payments.reduce((sum, p) => sum + p.amount, 0));
+  const balanceRemaining = round2(Math.max(0, totalRequired - totalPaid));
+  const isFullyPaid = totalRequired === 0 ? true : totalPaid >= totalRequired;
 
   const now = new Date();
 
@@ -84,10 +91,10 @@ export function calculateFinancialSummary(
       dueToDate += inst.amount;
     }
 
-    const coveredAmount = Math.min(inst.amount, Math.max(0, remainingPaymentToAllocate));
-    remainingPaymentToAllocate -= coveredAmount;
+    const coveredAmount = round2(Math.min(inst.amount, Math.max(0, remainingPaymentToAllocate)));
+    remainingPaymentToAllocate = round2(remainingPaymentToAllocate - coveredAmount);
 
-    const remainingAmount = Math.max(0, inst.amount - coveredAmount);
+    const remainingAmount = round2(Math.max(0, inst.amount - coveredAmount));
 
     let status: 'PAGADA' | 'PARCIAL' | 'VENCIDA' | 'PENDIENTE';
     if (coveredAmount >= inst.amount) {
@@ -113,8 +120,12 @@ export function calculateFinancialSummary(
     };
   });
 
-  const overdueAmount = Math.max(0, dueToDate - totalPaid);
+  dueToDate = totalRequired === 0 ? 0 : round2(dueToDate);
+  const overdueAmount = totalRequired === 0 ? 0 : round2(Math.max(0, dueToDate - totalPaid));
   const isOverdue = overdueAmount > 0;
+  if (totalRequired === 0) {
+    overdueCount = 0;
+  }
 
   let health: 'PAGADO_TOTAL' | 'AL_DIA' | 'EN_MORA' = 'AL_DIA';
   if (isFullyPaid) {

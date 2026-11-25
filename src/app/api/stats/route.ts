@@ -116,8 +116,12 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+
+    let activeParticipantsCount = 0;
     let totalProjectedUSD = 0;
     let totalCollectedUSD = 0;
+    let bajaCollectedUSD = 0;
     let totalOutstandingUSD = 0;
     let totalOverdueUSD = 0;
 
@@ -126,7 +130,7 @@ export async function GET(req: NextRequest) {
     let countCompletado = 0;
     let countBaja = 0;
 
-    // Métricas Médicas WSJ
+    // Métricas Médicas WSJ (sobre contingente activo)
     let countFichaCompletada = 0;
     let countFichaPendiente = 0;
     let countAlergiaSevera = 0;
@@ -148,48 +152,68 @@ export async function GET(req: NextRequest) {
     };
 
     participants.forEach((p) => {
-      // Role categorizing
+      const fStatus = (p.financialStatusSheet || '').toUpperCase();
+      const isBaja =
+        p.status === 'RETIRADO' ||
+        p.status?.toUpperCase().includes('BAJA') ||
+        p.status?.toUpperCase().includes('RETIRAD') ||
+        fStatus.includes('BAJA');
+
+      const realPaid =
+        p.totalPaidSheet !== null && p.totalPaidSheet !== undefined
+          ? p.totalPaidSheet
+          : p.payments.reduce((acc, pay) => acc + pay.amount, 0);
+
+      if (isBaja) {
+        countBaja++;
+        statusCounts.RETIRADO++;
+        bajaCollectedUSD += realPaid;
+        return;
+      }
+
+      activeParticipantsCount++;
+
+      // Role categorizing (solo activos)
       const roleKey = normalizeRoleKey(p.contingentRole);
       roleCounts[roleKey] = (roleCounts[roleKey] || 0) + 1;
 
-      // Status categorizing
+      // Status categorizing (solo activos)
       if (p.status in statusCounts) {
         statusCounts[p.status]++;
-      } else if (p.status?.includes('BAJA') || p.status?.includes('RETIRAD')) {
-        statusCounts.RETIRADO++;
       }
 
       // Financial status from sheet / database
-      const fStatus = (p.financialStatusSheet || '').toUpperCase();
       if (fStatus.includes('TOTAL') || fStatus.includes('COMPLETO')) {
         countCompletado++;
       } else if (fStatus.includes('DÍA') || fStatus.includes('DIA')) {
         countAlDia++;
-      } else if (fStatus.includes('BAJA')) {
-        countBaja++;
       } else {
         countEnMora++;
       }
 
-      // Amounts
-      const target = p.targetFeeUSD || p.plan?.totalAmount || 0;
-      const realPaid = p.totalPaidSheet !== null && p.totalPaidSheet !== undefined
-        ? p.totalPaidSheet
-        : p.payments.reduce((acc, pay) => acc + pay.amount, 0);
+      // Amounts (solo activos; respetar targetFeeUSD = 0 explícito)
+      const target =
+        p.targetFeeUSD !== null && p.targetFeeUSD !== undefined
+          ? p.targetFeeUSD
+          : (p.plan?.totalAmount ?? 0);
 
-      const debt = p.debtFinalUSD !== null && p.debtFinalUSD !== undefined
-        ? p.debtFinalUSD
-        : Math.max(0, target - realPaid);
+      const debt =
+        p.debtFinalUSD !== null && p.debtFinalUSD !== undefined
+          ? p.debtFinalUSD
+          : Math.max(0, target - realPaid);
 
-      const overdue = p.debtToDateUSD || 0;
+      const overdue = p.debtToDateUSD ?? 0;
 
       totalProjectedUSD += target;
       totalCollectedUSD += realPaid;
       totalOutstandingUSD += debt;
       totalOverdueUSD += overdue;
 
-      // Stats médicas
-      if (p.medicalRecord?.completionStatus === 'COMPLETED' || p.medicalRecord?.completionStatus === 'VERIFIED') {
+      // Stats médicas (contingente activo)
+      if (
+        p.medicalRecord?.completionStatus === 'COMPLETED' ||
+        p.medicalRecord?.completionStatus === 'VERIFIED'
+      ) {
         countFichaCompletada++;
       } else {
         countFichaPendiente++;
@@ -200,15 +224,22 @@ export async function GET(req: NextRequest) {
       if (p.medicalRecord?.requiresColdChainMedication) countCadenaFrio++;
     });
 
-    const collectionPercentage = totalProjectedUSD > 0
-      ? Math.round((totalCollectedUSD / totalProjectedUSD) * 100)
-      : 0;
+    totalProjectedUSD = round2(totalProjectedUSD);
+    totalCollectedUSD = round2(totalCollectedUSD);
+    bajaCollectedUSD = round2(bajaCollectedUSD);
+    totalOutstandingUSD = round2(totalOutstandingUSD);
+    totalOverdueUSD = round2(totalOverdueUSD);
+
+    const collectionPercentage =
+      totalProjectedUSD > 0 ? Math.round((totalCollectedUSD / totalProjectedUSD) * 100) : 0;
 
     return NextResponse.json({
       summary: {
-        totalParticipants: participants.length,
+        totalParticipants: activeParticipantsCount,
+        totalRegistered: participants.length,
         totalProjectedUSD,
         totalCollectedUSD,
+        bajaCollectedUSD,
         totalOutstandingUSD,
         totalOverdueUSD,
         countAlDia,
@@ -220,9 +251,11 @@ export async function GET(req: NextRequest) {
       },
       event: eventInfo,
       permissions: userPermissions,
-      totalParticipants: participants.length,
+      totalParticipants: activeParticipantsCount,
+      totalRegistered: participants.length,
       totalProjectedUSD,
       totalCollectedUSD,
+      bajaCollectedUSD,
       totalOutstandingUSD,
       totalOverdueUSD,
       collectionPercentage,

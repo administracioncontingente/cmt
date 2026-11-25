@@ -1,9 +1,68 @@
 import { PrismaClient } from '@prisma/client';
 import fs from 'fs';
-import * as XLSX from 'xlsx';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+
+function parseCsvRFC4180(text) {
+  const rows = [];
+  let row = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (inQuotes) {
+      if (ch === '"' && next === '"') {
+        current += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ',') {
+      row.push(current);
+      current = '';
+    } else if (ch === '\r' && next === '\n') {
+      row.push(current);
+      rows.push(row);
+      row = [];
+      current = '';
+      i++;
+    } else if (ch === '\n') {
+      row.push(current);
+      rows.push(row);
+      row = [];
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+
+  if (current.length > 0 || row.length > 0) {
+    row.push(current);
+    rows.push(row);
+  }
+
+  if (rows.length === 0) return [];
+  const headers = rows[0].map((h) => h.replace(/^\uFEFF/, '').trim());
+  const objects = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (r.length === 1 && r[0].trim() === '') continue;
+    const obj = {};
+    for (let j = 0; j < headers.length; j++) {
+      obj[headers[j]] = r[j] ?? '';
+    }
+    objects.push(obj);
+  }
+  return objects;
+}
 
 function cleanRut(rut) {
   if (!rut) return '';
@@ -31,34 +90,50 @@ function safeStr(val) {
 }
 
 function parseNum(val) {
-  if (!val) return 0.0;
-  const s = String(val).replace('$', '').replace(/\./g, '').replace(',', '.').trim();
+  if (val === undefined || val === null) return 0.0;
+  let s = String(val).replace(/\$/g, '').replace(/\s/g, '').trim();
+  if (!s) return 0.0;
+
+  if (s.includes(',') && s.includes('.')) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      s = s.replace(/,/g, '');
+    }
+  } else if (s.includes(',')) {
+    const parts = s.split(',');
+    if (parts.length === 2 && parts[1].length <= 2) {
+      s = s.replace(',', '.');
+    } else {
+      s = s.replace(/,/g, '');
+    }
+  }
+
   const n = parseFloat(s);
-  return isNaN(n) ? 0.0 : n;
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0.0;
 }
 
 function parseDate(str) {
   if (!str) return null;
   const s = String(str).trim();
-  if (s.includes('/')) {
-    const parts = s.split(' ')[0].split('/');
-    if (parts.length === 3) {
-      const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1;
-      const year = parseInt(parts[2], 10);
-      const d = new Date(year, month, day);
-      if (!isNaN(d.getTime())) return d;
+  const datePart = s.split(' ')[0];
+  const ddmmyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(datePart);
+  if (ddmmyyyy) {
+    const day = parseInt(ddmmyyyy[1], 10);
+    const month = parseInt(ddmmyyyy[2], 10);
+    const year = parseInt(ddmmyyyy[3], 10);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const d = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+      if (!Number.isNaN(d.getTime())) return d;
     }
   }
   const d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function readCsv(filePath) {
   const content = fs.readFileSync(filePath, 'utf-8');
-  const workbook = XLSX.read(content, { type: 'string' });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(sheet, { defval: '' });
+  return parseCsvRFC4180(content);
 }
 
 async function main() {
@@ -238,15 +313,26 @@ async function main() {
     }
 
     const amount = parseNum(row['Monto']);
-    if (amount <= 0) continue;
+    if (amount === 0) continue;
+
+    const doc = safeStr(row['Documento']);
+    const docUpper = doc.toUpperCase();
+    let paymentMethod = 'TRANSFERENCIA';
+    if (docUpper.includes('TRASPASO')) {
+      paymentMethod = 'TRASPASO';
+    } else if (docUpper.includes('DEVOLUCION') || amount < 0) {
+      paymentMethod = 'DEVOLUCION';
+    }
 
     paymentData.push({
       participantId,
       amount,
       paymentDate: parseDate(row['Fecha']) || new Date(),
-      paymentMethod: 'TRANSFERENCIA',
-      transactionReference: safeStr(row['Documento']) || null,
-      notes: safeStr(row['Distrito-Grupo']) ? `Distrito-Grupo: ${safeStr(row['Distrito-Grupo'])}` : null,
+      paymentMethod,
+      transactionReference: doc || null,
+      notes: safeStr(row['Distrito-Grupo']) && safeStr(row['Distrito-Grupo']) !== '#N/A'
+        ? `Distrito-Grupo: ${safeStr(row['Distrito-Grupo'])}`
+        : null,
       registeredById: adminUser.id,
     });
   }

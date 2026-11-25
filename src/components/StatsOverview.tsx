@@ -32,11 +32,16 @@ export function StatsOverview({ stats, currency = 'USD' }: StatsOverviewProps) {
             <Users className="w-4 h-4" />
           </div>
         </div>
-        <div className="flex items-baseline gap-2 mb-2">
+        <div className="flex items-baseline gap-2 mb-2 flex-wrap">
           <span className="text-3xl font-extrabold text-[#001558]">
             {stats.totalParticipants.toLocaleString('es-CL')}
           </span>
-          <span className="text-xs text-slate-500 font-medium">inscritos</span>
+          <span className="text-xs text-slate-500 font-medium">activos</span>
+          {stats.countBaja > 0 && (
+            <span className="ml-auto px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-bold">
+              {stats.countBaja} bajas
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1.5 text-[11px] text-slate-500 pt-2.5 border-t border-slate-100 flex-wrap">
           <span className="text-[#001558] font-bold">
@@ -83,6 +88,11 @@ export function StatsOverview({ stats, currency = 'USD' }: StatsOverviewProps) {
               style={{ width: `${Math.min(100, percentageCollected)}%` }}
             />
           </div>
+          {(stats.bajaCollectedUSD ?? 0) > 0 && (
+            <p className="text-[10px] text-slate-500 pt-0.5">
+              Saldo neto en bajas: {formatCurrency(stats.bajaCollectedUSD ?? 0, currency)}
+            </p>
+          )}
         </div>
       </div>
 

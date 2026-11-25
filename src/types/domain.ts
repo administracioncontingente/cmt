@@ -345,8 +345,10 @@ export interface ParticipantDTO {
 export interface DashboardStatsDTO {
   summary: {
     totalParticipants: number;
+    totalRegistered?: number;
     totalProjectedUSD: number;
     totalCollectedUSD: number;
+    bajaCollectedUSD?: number;
     totalOutstandingUSD: number;
     totalOverdueUSD: number;
     countAlDia: number;

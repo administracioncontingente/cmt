@@ -208,7 +208,7 @@ export function ParticipantDetailModal({
   }
 
   const fin: FinancialSummary = data.financial ?? {
-    totalRequired: data.targetFeeUSD || 3600,
+    totalRequired: data.targetFeeUSD ?? 3600,
     totalPaid: data.totalPaidSheet || 0,
     balanceRemaining: data.debtFinalUSD || 0,
     isFullyPaid: false,
@@ -219,7 +219,10 @@ export function ParticipantDetailModal({
     health: 'AL_DIA',
     breakdown: [],
   };
-  const targetFee = data.targetFeeUSD || fin.totalRequired;
+  const targetFee =
+    data.targetFeeUSD !== null && data.targetFeeUSD !== undefined
+      ? data.targetFeeUSD
+      : fin.totalRequired;
   const remainingFee = Math.max(0, targetFee - fin.totalPaid);
 
   const getFinancialBadgeClass = (status?: string | null) => {
@@ -412,7 +415,9 @@ export function ParticipantDetailModal({
                   <p className="text-[10px] text-slate-500 mt-0.5">
                     {targetFee > 0
                       ? `${Math.round((fin.totalPaid / targetFee) * 100)}% de la meta`
-                      : '0%'}
+                      : data.status === 'RETIRADO'
+                        ? 'Participante dado de baja'
+                        : '100% (Exento / Becado)'}
                   </p>
                 </div>
 
@@ -660,58 +665,71 @@ export function ParticipantDetailModal({
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {data.payments.map((p: PaymentDTO) => (
-                      <div
-                        key={p.id}
-                        className="bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between hover:border-[#FEB135] transition-colors shadow-2xs"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-[#FFF8E1] border border-[#FEB135] text-[#001558] flex items-center justify-center font-black text-xs">
-                            $
-                          </div>
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-black text-[#001558] text-sm font-mono">
-                                +{formatCurrency(p.amount, currency)}
-                              </span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#EEF2FF] text-[#001558] font-semibold border border-[#001558]/20">
-                                {p.paymentMethod}
-                              </span>
-                              {p.transactionReference && (
-                                <span className="text-[10px] font-mono text-[#001558] bg-[#FFFBF0] px-1.5 py-0.5 rounded border border-[#FEB135]/40">
-                                  Doc: {p.transactionReference}
+                    {data.payments.map((p: PaymentDTO) => {
+                      const isNegative = p.amount < 0;
+                      return (
+                        <div
+                          key={p.id}
+                          className="bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between hover:border-[#FEB135] transition-colors shadow-2xs"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs border ${
+                                isNegative
+                                  ? 'bg-red-50 border-red-200 text-red-700'
+                                  : 'bg-[#FFF8E1] border-[#FEB135] text-[#001558]'
+                              }`}
+                            >
+                              {isNegative ? '-' : '$'}
+                            </div>
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`font-black text-sm font-mono ${
+                                    isNegative ? 'text-red-700' : 'text-[#001558]'
+                                  }`}
+                                >
+                                  {isNegative ? formatCurrency(p.amount, currency) : `+${formatCurrency(p.amount, currency)}`}
                                 </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-                              <span>
-                                {new Date(p.paymentDate).toLocaleDateString('es-CL', {
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric',
-                                })}
-                              </span>
-                              {p.notes && <span>• {p.notes}</span>}
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#EEF2FF] text-[#001558] font-semibold border border-[#001558]/20">
+                                  {p.paymentMethod}
+                                </span>
+                                {p.transactionReference && (
+                                  <span className="text-[10px] font-mono text-[#001558] bg-[#FFFBF0] px-1.5 py-0.5 rounded border border-[#FEB135]/40">
+                                    Doc: {p.transactionReference}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                                <span>
+                                  {new Date(p.paymentDate).toLocaleDateString('es-CL', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                  })}
+                                </span>
+                                {p.notes && <span>• {p.notes}</span>}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {canManageFinance && (
-                          <button
-                            onClick={() => handleDeletePayment(p.id)}
-                            disabled={deletingPaymentId === p.id}
-                            title="Anular abono"
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                          >
-                            {deletingPaymentId === p.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin text-red-600" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                          {canManageFinance && (
+                            <button
+                              onClick={() => handleDeletePayment(p.id)}
+                              disabled={deletingPaymentId === p.id}
+                              title="Anular abono"
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              {deletingPaymentId === p.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-red-600" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

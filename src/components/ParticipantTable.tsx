@@ -308,12 +308,16 @@ export function ParticipantTable({
                 const totalRequired = fin?.totalRequired ?? 0;
 
                 const totalTarget =
-                  p.targetFeeUSD && p.targetFeeUSD > 0 ? p.targetFeeUSD : totalRequired;
+                  p.targetFeeUSD !== null && p.targetFeeUSD !== undefined
+                    ? p.targetFeeUSD
+                    : totalRequired;
 
                 const percentage =
                   totalTarget > 0
                     ? Math.min(100, Math.round((totalPaid / totalTarget) * 100))
-                    : 0;
+                    : p.status === 'RETIRADO'
+                      ? 0
+                      : 100;
 
                 const remaining = Math.max(0, totalTarget - totalPaid);
                 const isMedCompleted =
