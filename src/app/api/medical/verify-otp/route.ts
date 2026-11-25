@@ -1,23 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyMedicalCode, createMedicalEditToken } from '@/lib/medicalAuth';
-import QRCode from 'qrcode';
+import {
+  verifyMedicalCode,
+  createMedicalEditToken,
+  verifyOtpChallengeToken,
+} from '@/lib/medicalAuth';
+import { apiErrorResponse } from '@/lib/apiUtils';
+import { generateMedicalQr } from '@/lib/qr';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { participantId, email, code } = body;
+    const body = (await req.json()) as {
+      challengeToken?: unknown;
+      participantId?: unknown;
+      email?: unknown;
+      code?: unknown;
+    };
 
-    if (!participantId || !email || !code) {
+    const code = typeof body.code === 'string' ? body.code.trim() : '';
+    const challengeToken =
+      typeof body.challengeToken === 'string' ? body.challengeToken.trim() : '';
+
+    let resolvedParticipantId =
+      typeof body.participantId === 'string' ? body.participantId.trim() : '';
+    let resolvedEmail = typeof body.email === 'string' ? body.email.trim() : '';
+
+    if (challengeToken) {
+      const challengePayload = await verifyOtpChallengeToken(challengeToken);
+      if (!challengePayload) {
+        return NextResponse.json(
+          {
+            error:
+              'El desafío de verificación es inválido o ha expirado. Solicita un nuevo código.',
+          },
+          { status: 401 }
+        );
+      }
+      resolvedParticipantId = challengePayload.participantId;
+      resolvedEmail = challengePayload.email;
+    }
+
+    if (!resolvedParticipantId || !resolvedEmail || !code) {
       return NextResponse.json(
-        { error: 'Parámetros incompletos (participantId, email y code son requeridos)' },
+        {
+          error:
+            'Parámetros incompletos (challengeToken o participantId/email y code son requeridos)',
+        },
         { status: 400 }
       );
     }
 
     const isValid = await verifyMedicalCode({
-      participantId,
-      email,
+      participantId: resolvedParticipantId,
+      email: resolvedEmail,
       code,
     });
 
@@ -29,7 +64,7 @@ export async function POST(req: NextRequest) {
     }
 
     const participant = await prisma.participant.findUnique({
-      where: { id: participantId },
+      where: { id: resolvedParticipantId },
       include: {
         medicalRecord: true,
       },
@@ -62,22 +97,14 @@ export async function POST(req: NextRequest) {
     const editToken = await createMedicalEditToken({
       participantId: participant.id,
       rut: participant.rut,
-      email: email.toLowerCase().trim(),
+      email: resolvedEmail.toLowerCase().trim(),
       scope: 'MEDICAL_EDIT',
     });
 
-    // Generar código QR en Base64 Data URL para visualización inmediata
-    const origin = req.headers.get('origin') || req.headers.get('host') || 'http://localhost:3000';
-    const baseUrl = origin.startsWith('http') ? origin : `https://${origin}`;
-    const qrEmergencyUrl = `${baseUrl}/medico/${medicalRecord.qrAccessCode}`;
-    const qrDataUrl = await QRCode.toDataURL(qrEmergencyUrl, {
-      margin: 1,
-      width: 256,
-      color: {
-        dark: '#001558',
-        light: '#FFFFFF',
-      },
-    });
+    const { qrEmergencyUrl, qrDataUrl } = await generateMedicalQr(
+      req,
+      medicalRecord.qrAccessCode
+    );
 
     return NextResponse.json({
       success: true,
@@ -106,11 +133,7 @@ export async function POST(req: NextRequest) {
       },
       medicalRecord,
     });
-  } catch (error: any) {
-    console.error('Error al verificar código OTP médico:', error);
-    return NextResponse.json(
-      { error: error.message || 'Error interno al validar el código' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error interno al validar el código');
   }
 }

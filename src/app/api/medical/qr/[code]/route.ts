@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import QRCode from 'qrcode';
+import { apiErrorResponse } from '@/lib/apiUtils';
+import { generateMedicalQr } from '@/lib/qr';
 
 export async function GET(
   req: NextRequest,
@@ -40,17 +41,10 @@ export async function GET(
       );
     }
 
-    const origin = req.headers.get('origin') || req.headers.get('host') || 'http://localhost:3000';
-    const baseUrl = origin.startsWith('http') ? origin : `https://${origin}`;
-    const qrEmergencyUrl = `${baseUrl}/medico/${medicalRecord.qrAccessCode}`;
-    const qrDataUrl = await QRCode.toDataURL(qrEmergencyUrl, {
-      margin: 1,
-      width: 256,
-      color: {
-        dark: '#001558',
-        light: '#FFFFFF',
-      },
-    });
+    const { qrEmergencyUrl, qrDataUrl } = await generateMedicalQr(
+      req,
+      medicalRecord.qrAccessCode
+    );
 
     return NextResponse.json({
       success: true,
@@ -59,11 +53,7 @@ export async function GET(
       qrEmergencyUrl,
       qrDataUrl,
     });
-  } catch (error: any) {
-    console.error('Error al consultar ficha por QR:', error);
-    return NextResponse.json(
-      { error: error.message || 'Error al procesar consulta de emergencia' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al procesar consulta de emergencia');
   }
 }

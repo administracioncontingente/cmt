@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, getEventPermissions } from '@/lib/auth';
+import { apiErrorResponse } from '@/lib/apiUtils';
 
 export async function POST(
   req: NextRequest,
@@ -14,11 +15,30 @@ export async function POST(
   const { id: incidentId } = await params;
 
   try {
-    const body = await req.json();
-    const { content, isInternal } = body;
+    const incident = await prisma.incident.findUnique({
+      where: { id: incidentId },
+      select: { id: true, eventId: true },
+    });
 
-    if (!content || !content.trim()) {
-      return NextResponse.json({ error: 'El contenido del comentario es requerido' }, { status: 400 });
+    if (!incident) {
+      return NextResponse.json({ error: 'Incidencia no encontrada' }, { status: 404 });
+    }
+
+    if (!getEventPermissions(user, incident.eventId).canManageCrm) {
+      return NextResponse.json(
+        { error: 'No tienes permisos para comentar en esta incidencia' },
+        { status: 403 }
+      );
+    }
+
+    const body = (await req.json()) as { content?: unknown; isInternal?: unknown };
+    const content = typeof body.content === 'string' ? body.content.trim() : '';
+
+    if (!content) {
+      return NextResponse.json(
+        { error: 'El contenido del comentario es requerido' },
+        { status: 400 }
+      );
     }
 
     const comment = await prisma.incidentComment.create({
@@ -26,8 +46,8 @@ export async function POST(
         incidentId,
         userId: user.id,
         authorName: user.name,
-        content: content.trim(),
-        isInternal: isInternal !== undefined ? Boolean(isInternal) : true,
+        content,
+        isInternal: body.isInternal !== undefined ? Boolean(body.isInternal) : true,
       },
       include: {
         user: { select: { id: true, name: true, email: true } },
@@ -38,7 +58,7 @@ export async function POST(
       message: 'Comentario agregado',
       comment,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al agregar comentario a la incidencia');
   }
 }

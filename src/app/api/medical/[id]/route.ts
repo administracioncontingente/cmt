@@ -1,10 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, getEventPermissions } from '@/lib/auth';
 import { verifyMedicalEditToken } from '@/lib/medicalAuth';
 import { translateCompleteMedicalRecord } from '@/lib/medicalTranslation';
-import { cleanRut, formatRut } from '@/lib/rut';
-import QRCode from 'qrcode';
+import { apiErrorResponse, parseOptionalFloat } from '@/lib/apiUtils';
+import { generateMedicalQr } from '@/lib/qr';
+
+interface MedicalUpdateBody {
+  bloodType?: string | null;
+  heightCm?: unknown;
+  weightKg?: unknown;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  emergencyContactRelation?: string | null;
+  emergencyContactEmail?: string | null;
+  insuranceCompany?: string | null;
+  insurancePolicyNumber?: string | null;
+  insuranceEmergencyPhone?: string | null;
+  hasSevereAllergies?: boolean;
+  carriesEpiPen?: boolean;
+  allergiesES?: string | null;
+  hasChronicConditions?: boolean;
+  chronicConditionsES?: string | null;
+  takesRegularMedication?: boolean;
+  requiresColdChainMedication?: boolean;
+  currentMedicationsES?: string | null;
+  dietaryRestrictionsES?: string | null;
+  tetanusLastDoseYear?: string | number | null;
+  vaccinationRecordsES?: string | null;
+  pastSurgeriesInjuriesES?: string | null;
+  devicesImplantsES?: string | null;
+  physicalLimitationsES?: string | null;
+  emergencyTreatmentConsent?: boolean;
+  declaredByName?: string | null;
+  declaredByRut?: string | null;
+  declaredByRole?: string | null;
+}
 
 export async function GET(
   req: NextRequest,
@@ -12,65 +43,28 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const { searchParams } = new URL(req.url);
-    const rutParam = searchParams.get('rut');
-    const emailParam = searchParams.get('email');
     const authHeader = req.headers.get('authorization');
 
-    // 1. Verificar si viene con sesión de Administrador
     const adminUser = await getCurrentUser();
 
-    // 2. Verificar si viene con Token de Edición Médica (OTP previo)
     let tokenPayload = null;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       tokenPayload = await verifyMedicalEditToken(token);
     }
 
-    // Buscar participante por ID, o si id es 'by-rut', buscar por los parámetros de búsqueda
-    let participant = null;
-
-    if (id === 'by-rut' && rutParam && emailParam) {
-      const cleaned = cleanRut(rutParam);
-      const formatted = formatRut(cleaned);
-      const normEmail = emailParam.toLowerCase().trim();
-
-      participant = await prisma.participant.findFirst({
-        where: {
-          AND: [
-            {
-              OR: [
-                { rut: formatted },
-                { rut: cleaned },
-                { rutClean: cleaned },
-              ],
-            },
-            {
-              OR: [
-                { guardianEmail: normEmail },
-                { email: normEmail },
-              ],
-            },
-          ],
-        },
-        include: {
-          medicalRecord: true,
-        },
-      });
-    } else {
-      participant = await prisma.participant.findFirst({
-        where: {
-          OR: [
-            { id },
-            { rut: id },
-            { medicalRecord: { qrAccessCode: id } },
-          ],
-        },
-        include: {
-          medicalRecord: true,
-        },
-      });
-    }
+    const participant = await prisma.participant.findFirst({
+      where: {
+        OR: [
+          { id },
+          { rut: id },
+          { medicalRecord: { qrAccessCode: id } },
+        ],
+      },
+      include: {
+        medicalRecord: true,
+      },
+    });
 
     if (!participant) {
       return NextResponse.json(
@@ -79,30 +73,28 @@ export async function GET(
       );
     }
 
-    // Control de acceso: Permitir si es admin, o si el token coincide con el participante, o si coincide RUT + email
-    const isAuthorized =
-      !!adminUser ||
-      (tokenPayload && tokenPayload.participantId === participant.id) ||
-      (rutParam &&
-        emailParam &&
-        (cleanRut(participant.rut) === cleanRut(rutParam) ||
-          participant.rut === formatRut(cleanRut(rutParam))) &&
-        (participant.email?.toLowerCase() === emailParam.toLowerCase().trim() ||
-          participant.guardianEmail?.toLowerCase() === emailParam.toLowerCase().trim()));
+    const hasAdminAccess = adminUser
+      ? participant.eventId
+        ? getEventPermissions(adminUser, participant.eventId).canView
+        : adminUser.role === 'SUPER_ADMIN'
+      : false;
 
-    // Si no está autorizado pero es acceso por QR de emergencia (id coincide con qrAccessCode):
-    const isQrEmergencyAccess =
-      participant.medicalRecord?.qrAccessCode === id ||
-      searchParams.get('qrAccess') === 'true';
+    const hasTokenAccess = Boolean(
+      tokenPayload && tokenPayload.participantId === participant.id
+    );
 
-    if (!isAuthorized && !isQrEmergencyAccess) {
+    const hasQrAccess = Boolean(
+      participant.medicalRecord?.qrAccessCode &&
+        participant.medicalRecord.qrAccessCode === id
+    );
+
+    if (!hasAdminAccess && !hasTokenAccess && !hasQrAccess) {
       return NextResponse.json(
         { error: 'Acceso no autorizado a la ficha médica confidencial' },
-        { status: 401 }
+        { status: adminUser ? 403 : 401 }
       );
     }
 
-    // Asegurar que exista MedicalRecord
     let medicalRecord = participant.medicalRecord;
     if (!medicalRecord) {
       medicalRecord = await prisma.medicalRecord.create({
@@ -118,18 +110,10 @@ export async function GET(
       });
     }
 
-    // Generar código QR Data URL
-    const origin = req.headers.get('origin') || req.headers.get('host') || 'http://localhost:3000';
-    const baseUrl = origin.startsWith('http') ? origin : `https://${origin}`;
-    const qrEmergencyUrl = `${baseUrl}/medico/${medicalRecord.qrAccessCode}`;
-    const qrDataUrl = await QRCode.toDataURL(qrEmergencyUrl, {
-      margin: 1,
-      width: 256,
-      color: {
-        dark: '#001558',
-        light: '#FFFFFF',
-      },
-    });
+    const { qrEmergencyUrl, qrDataUrl } = await generateMedicalQr(
+      req,
+      medicalRecord.qrAccessCode
+    );
 
     return NextResponse.json({
       participant: {
@@ -156,12 +140,8 @@ export async function GET(
       qrEmergencyUrl,
       qrDataUrl,
     });
-  } catch (error: any) {
-    console.error('Error al obtener ficha médica:', error);
-    return NextResponse.json(
-      { error: error.message || 'Error al procesar la solicitud médica' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al procesar la solicitud médica');
   }
 }
 
@@ -171,10 +151,9 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const body = await req.json();
+    const body = (await req.json()) as MedicalUpdateBody;
     const authHeader = req.headers.get('authorization');
 
-    // Validar autorización: Admin o Token de Edición Médica
     const adminUser = await getCurrentUser();
     let tokenPayload = null;
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -182,10 +161,13 @@ export async function POST(
       tokenPayload = await verifyMedicalEditToken(token);
     }
 
-    // Encontrar participante
     const participant = await prisma.participant.findFirst({
       where: {
-        OR: [{ id }, { rut: id }],
+        OR: [
+          { id },
+          { rut: id },
+          { medicalRecord: { qrAccessCode: id } },
+        ],
       },
       include: {
         medicalRecord: true,
@@ -199,26 +181,33 @@ export async function POST(
       );
     }
 
-    const isAuthorized =
-      !!adminUser ||
-      (tokenPayload && tokenPayload.participantId === participant.id);
+    const hasAdminAccess = adminUser
+      ? participant.eventId
+        ? getEventPermissions(adminUser, participant.eventId).canManageMedical
+        : adminUser.role === 'SUPER_ADMIN'
+      : false;
 
-    if (!isAuthorized) {
+    const hasEditTokenAccess = Boolean(
+      tokenPayload &&
+        tokenPayload.participantId === participant.id &&
+        tokenPayload.scope === 'MEDICAL_EDIT'
+    );
+
+    if (!hasAdminAccess && !hasEditTokenAccess) {
       return NextResponse.json(
         { error: 'No tienes autorización para editar esta ficha médica.' },
-        { status: 401 }
+        { status: adminUser || tokenPayload ? 403 : 401 }
       );
     }
 
-    // Realizar la traducción médica rigurosa cruzada ES -> EN y PL
     const translations = translateCompleteMedicalRecord({
       bloodType: body.bloodType,
       allergiesES: body.allergiesES,
-      hasSevereAllergies: !!body.hasSevereAllergies,
-      carriesEpiPen: !!body.carriesEpiPen,
+      hasSevereAllergies: Boolean(body.hasSevereAllergies),
+      carriesEpiPen: Boolean(body.carriesEpiPen),
       chronicConditionsES: body.chronicConditionsES,
       currentMedicationsES: body.currentMedicationsES,
-      requiresColdChainMedication: !!body.requiresColdChainMedication,
+      requiresColdChainMedication: Boolean(body.requiresColdChainMedication),
       dietaryRestrictionsES: body.dietaryRestrictionsES,
       vaccinationRecordsES: body.vaccinationRecordsES,
       tetanusLastDoseYear: body.tetanusLastDoseYear ? String(body.tetanusLastDoseYear) : null,
@@ -227,12 +216,13 @@ export async function POST(
       physicalLimitationsES: body.physicalLimitationsES,
     });
 
-    const clientIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || undefined;
+    const clientIp =
+      req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || undefined;
 
     const medicalData = {
       bloodType: body.bloodType || null,
-      heightCm: body.heightCm ? parseFloat(body.heightCm) : null,
-      weightKg: body.weightKg ? parseFloat(body.weightKg) : null,
+      heightCm: parseOptionalFloat(body.heightCm),
+      weightKg: parseOptionalFloat(body.weightKg),
 
       emergencyContactName: body.emergencyContactName || null,
       emergencyContactPhone: body.emergencyContactPhone || null,
@@ -243,19 +233,19 @@ export async function POST(
       insurancePolicyNumber: body.insurancePolicyNumber || null,
       insuranceEmergencyPhone: body.insuranceEmergencyPhone || null,
 
-      hasSevereAllergies: !!body.hasSevereAllergies,
-      carriesEpiPen: !!body.carriesEpiPen,
+      hasSevereAllergies: Boolean(body.hasSevereAllergies),
+      carriesEpiPen: Boolean(body.carriesEpiPen),
       allergiesES: body.allergiesES || null,
       allergiesEN: translations.allergiesEN,
       allergiesPL: translations.allergiesPL,
 
-      hasChronicConditions: !!body.hasChronicConditions,
+      hasChronicConditions: Boolean(body.hasChronicConditions),
       chronicConditionsES: body.chronicConditionsES || null,
       chronicConditionsEN: translations.chronicConditionsEN,
       chronicConditionsPL: translations.chronicConditionsPL,
 
-      takesRegularMedication: !!body.takesRegularMedication,
-      requiresColdChainMedication: !!body.requiresColdChainMedication,
+      takesRegularMedication: Boolean(body.takesRegularMedication),
+      requiresColdChainMedication: Boolean(body.requiresColdChainMedication),
       currentMedicationsES: body.currentMedicationsES || null,
       currentMedicationsEN: translations.currentMedicationsEN,
       currentMedicationsPL: translations.currentMedicationsPL,
@@ -281,7 +271,7 @@ export async function POST(
       physicalLimitationsEN: translations.physicalLimitationsEN,
       physicalLimitationsPL: translations.physicalLimitationsPL,
 
-      emergencyTreatmentConsent: !!body.emergencyTreatmentConsent,
+      emergencyTreatmentConsent: Boolean(body.emergencyTreatmentConsent),
       declaredByName: body.declaredByName || null,
       declaredByRut: body.declaredByRut || null,
       declaredByRole: body.declaredByRole || 'APODERADO',
@@ -300,7 +290,6 @@ export async function POST(
       update: medicalData,
     });
 
-    // Actualizar campos médicos resumidos en el participante
     await prisma.participant.update({
       where: { id: participant.id },
       data: {
@@ -311,18 +300,10 @@ export async function POST(
       },
     });
 
-    // Generar URL del código QR
-    const origin = req.headers.get('origin') || req.headers.get('host') || 'http://localhost:3000';
-    const baseUrl = origin.startsWith('http') ? origin : `https://${origin}`;
-    const qrEmergencyUrl = `${baseUrl}/medico/${updatedRecord.qrAccessCode}`;
-    const qrDataUrl = await QRCode.toDataURL(qrEmergencyUrl, {
-      margin: 1,
-      width: 256,
-      color: {
-        dark: '#001558',
-        light: '#FFFFFF',
-      },
-    });
+    const { qrEmergencyUrl, qrDataUrl } = await generateMedicalQr(
+      req,
+      updatedRecord.qrAccessCode
+    );
 
     return NextResponse.json({
       success: true,
@@ -331,11 +312,7 @@ export async function POST(
       qrEmergencyUrl,
       qrDataUrl,
     });
-  } catch (error: any) {
-    console.error('Error al guardar ficha médica:', error);
-    return NextResponse.json(
-      { error: error.message || 'Error interno al guardar la ficha médica' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error interno al guardar la ficha médica');
   }
 }
