@@ -1,15 +1,44 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, getActiveEventId, getEventPermissions } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
   try {
+    const { searchParams } = new URL(req.url);
+    const paramEventId = searchParams.get('eventId');
+    const activeEventId = paramEventId || (await getActiveEventId());
+
+    const where: any = {};
+    if (activeEventId) {
+      where.eventId = activeEventId;
+    }
+
+    // Obtener información del evento activo
+    const eventInfo = activeEventId
+      ? await prisma.event.findUnique({
+          where: { id: activeEventId },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            shortName: true,
+            country: true,
+            city: true,
+            flagEmoji: true,
+            currency: true,
+            themeColor: true,
+            accentColor: true,
+          },
+        })
+      : null;
+
     const participants = await prisma.participant.findMany({
+      where,
       select: {
         id: true,
         contingentRole: true,
@@ -25,6 +54,14 @@ export async function GET() {
         payments: {
           select: { amount: true },
         },
+        medicalRecord: {
+          select: {
+            completionStatus: true,
+            hasSevereAllergies: true,
+            carriesEpiPen: true,
+            requiresColdChainMedication: true,
+          },
+        },
       },
     });
 
@@ -37,6 +74,13 @@ export async function GET() {
     let countEnMora = 0;
     let countCompletado = 0;
     let countBaja = 0;
+
+    // Métricas Médicas WSJ
+    let countFichaCompletada = 0;
+    let countFichaPendiente = 0;
+    let countAlergiaSevera = 0;
+    let countEpiPen = 0;
+    let countCadenaFrio = 0;
 
     const roleCounts: Record<string, number> = {
       JOVEN: 0,
@@ -68,53 +112,56 @@ export async function GET() {
       // Status categorizing
       if (p.status in statusCounts) {
         statusCounts[p.status]++;
-      } else {
-        statusCounts.CONFIRMADO++;
+      } else if (p.status?.includes('BAJA') || p.status?.includes('RETIRAD')) {
+        statusCounts.RETIRADO++;
       }
 
-      const target = p.targetFeeUSD && p.targetFeeUSD > 0
-        ? p.targetFeeUSD
-        : (p.plan?.totalAmount || 3600);
-
-      const paid = p.payments.reduce((sum, pay) => sum + pay.amount, 0);
-      const remaining = Math.max(0, target - paid);
-
-      totalProjectedUSD += target;
-      totalCollectedUSD += paid;
-      totalOutstandingUSD += remaining;
-
-      if (p.debtToDateUSD && p.debtToDateUSD > 0) {
-        totalOverdueUSD += p.debtToDateUSD;
-      }
-
-      // Financial status from sheet or calculated
-      const sheetStatus = p.financialStatusSheet || '';
-      if (sheetStatus === 'Total Pagado' || (target > 0 && paid >= target)) {
+      // Financial status from sheet / database
+      const fStatus = (p.financialStatusSheet || '').toUpperCase();
+      if (fStatus.includes('TOTAL') || fStatus.includes('COMPLETO')) {
         countCompletado++;
-      } else if (sheetStatus === 'Adeuda' || (p.debtToDateUSD && p.debtToDateUSD > 0)) {
-        countEnMora++;
-      } else if (sheetStatus === 'BAJA' || p.status === 'RETIRADO') {
+      } else if (fStatus.includes('DÍA') || fStatus.includes('DIA')) {
+        countAlDia++;
+      } else if (fStatus.includes('BAJA')) {
         countBaja++;
       } else {
-        countAlDia++;
+        countEnMora++;
       }
+
+      // Amounts
+      const target = p.targetFeeUSD || p.plan?.totalAmount || 0;
+      const realPaid = p.totalPaidSheet !== null && p.totalPaidSheet !== undefined
+        ? p.totalPaidSheet
+        : p.payments.reduce((acc, pay) => acc + pay.amount, 0);
+
+      const debt = p.debtFinalUSD !== null && p.debtFinalUSD !== undefined
+        ? p.debtFinalUSD
+        : Math.max(0, target - realPaid);
+
+      const overdue = p.debtToDateUSD || 0;
+
+      totalProjectedUSD += target;
+      totalCollectedUSD += realPaid;
+      totalOutstandingUSD += debt;
+      totalOverdueUSD += overdue;
+
+      // Stats médicas
+      if (p.medicalRecord?.completionStatus === 'COMPLETED' || p.medicalRecord?.completionStatus === 'VERIFIED') {
+        countFichaCompletada++;
+      } else {
+        countFichaPendiente++;
+      }
+
+      if (p.medicalRecord?.hasSevereAllergies) countAlergiaSevera++;
+      if (p.medicalRecord?.carriesEpiPen) countEpiPen++;
+      if (p.medicalRecord?.requiresColdChainMedication) countCadenaFrio++;
     });
 
-    // Recent payments
-    const recentPayments = await prisma.payment.findMany({
-      take: 6,
-      orderBy: { paymentDate: 'desc' },
-      include: {
-        participant: {
-          select: {
-            firstName: true,
-            lastName: true,
-            rut: true,
-            contingentRole: true,
-          },
-        },
-      },
-    });
+    const collectionPercentage = totalProjectedUSD > 0
+      ? Math.round((totalCollectedUSD / totalProjectedUSD) * 100)
+      : 0;
+
+    const userPermissions = activeEventId ? getEventPermissions(user, activeEventId) : null;
 
     return NextResponse.json({
       summary: {
@@ -130,12 +177,35 @@ export async function GET() {
         roleCounts,
         statusCounts,
       },
-      recentPayments,
+      event: eventInfo,
+      permissions: userPermissions,
+      totalParticipants: participants.length,
+      totalProjectedUSD,
+      totalCollectedUSD,
+      totalOutstandingUSD,
+      totalOverdueUSD,
+      collectionPercentage,
+      currency: eventInfo?.currency || 'USD',
+      financialSummary: {
+        completado: countCompletado,
+        alDia: countAlDia,
+        enMora: countEnMora,
+        baja: countBaja,
+      },
+      roleBreakdown: roleCounts,
+      statusBreakdown: statusCounts,
+      medicalSummary: {
+        completadas: countFichaCompletada,
+        pendientes: countFichaPendiente,
+        alergiasSeveras: countAlergiaSevera,
+        portaEpiPen: countEpiPen,
+        cadenaFrio: countCadenaFrio,
+      },
     });
-  } catch (error) {
-    console.error('Error in /api/stats:', error);
+  } catch (error: any) {
+    console.error('Error calculating stats:', error);
     return NextResponse.json(
-      { error: 'Error al calcular estadísticas' },
+      { error: 'Error interno al calcular estadísticas: ' + error.message },
       { status: 500 }
     );
   }

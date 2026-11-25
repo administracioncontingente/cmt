@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, getActiveEventId } from '@/lib/auth';
 import { calculateFinancialSummary } from '@/lib/finance';
 import * as XLSX from 'xlsx';
 
@@ -12,12 +12,17 @@ export async function GET(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url);
+    const paramEventId = searchParams.get('eventId');
+    const activeEventId = paramEventId || (await getActiveEventId());
     const search = searchParams.get('search')?.trim().toLowerCase() || '';
     const role = searchParams.get('role')?.trim() || '';
     const status = searchParams.get('status')?.trim() || '';
     const health = searchParams.get('health')?.trim() || '';
 
     const where: any = {};
+    if (activeEventId) {
+      where.eventId = activeEventId;
+    }
     if (role && role !== 'ALL') {
       if (role === 'JOVEN') where.contingentRole = { in: ['Participante', 'Responsable de Patrulla', 'JOVEN'] };
       else if (role === 'DIRIGENTE') where.contingentRole = { in: ['RESPONSABLE', 'DIRIGENTE', 'Educador'] };

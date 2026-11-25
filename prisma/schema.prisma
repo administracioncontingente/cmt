@@ -8,28 +8,91 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// -------------------------------------------------------------
+// EVENTOS Y GESTIÓN MULTI-EVENTO
+// -------------------------------------------------------------
+
+model Event {
+  id           String            @id @default(cuid())
+  code         String            @unique // Ej: "WSJ-2027", "MOOT-2029", "PAXTU-2026"
+  name         String            // Ej: "26° World Scout Jamboree • Polonia 2027"
+  shortName    String?           // Ej: "Polonia 2027"
+  type         String            @default("JAMBOREE_MUNDIAL") // JAMBOREE_MUNDIAL, MOOT_MUNDIAL, JAMBOREE_NACIONAL, etc.
+  description  String?
+  country      String?           // Ej: "Polonia"
+  city         String?           // Ej: "Gdańsk"
+  flagEmoji    String?           @default("🇵🇱") // Emoji de bandera o ícono
+  startDate    DateTime?
+  endDate      DateTime?
+  currency     String            @default("USD") // "USD", "CLP", "EUR"
+  isActive     Boolean           @default(true)
+  isDefault    Boolean           @default(false)
+
+  // Configuración de Identidad Visual
+  themeColor   String?           @default("#001558")
+  accentColor  String?           @default("#FEB135")
+  bannerUrl    String?
+
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  // Relaciones
+  memberships  EventMembership[]
+  plans        PaymentPlan[]
+  participants Participant[]
+}
+
+model EventMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  role      String   @default("COORDINATOR") // EVENT_ADMIN, TREASURER, COORDINATOR, MEDICAL_STAFF, VIEWER
+  title     String?  // Ej: "Jefe de Contingente", "Tesorero Nacional", "Encargado de Salud"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, eventId])
+  @@index([userId])
+  @@index([eventId])
+}
+
+// -------------------------------------------------------------
+// USUARIOS Y AUTENTICACIÓN
+// -------------------------------------------------------------
+
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id           String            @id @default(cuid())
+  email        String            @unique
   passwordHash String
   name         String
-  role         String    @default("ADMIN") // ADMIN, TREASURER, COORDINATOR
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  role         String            @default("ADMIN") // SUPER_ADMIN, ADMIN, USER
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
   payments     Payment[]
+  memberships  EventMembership[]
 }
+
+// -------------------------------------------------------------
+// PLANES FINANCIEROS Y CUOTAS POR EVENTO
+// -------------------------------------------------------------
 
 model PaymentPlan {
   id           String                @id @default(cuid())
-  roleKey      String                @unique // JOVEN, DIRIGENTE, IST, CMT
+  eventId      String?
+  event        Event?                @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  roleKey      String                // JOVEN, DIRIGENTE, IST, CMT
   name         String
-  totalAmount  Float                 // Total in USD
+  totalAmount  Float                 // Total en moneda del evento (ej: USD)
   currency     String                @default("USD")
   description  String?
   installments InstallmentSchedule[]
   participants Participant[]
   createdAt    DateTime              @default(now())
   updatedAt    DateTime              @updatedAt
+
+  @@index([eventId])
 }
 
 model InstallmentSchedule {
@@ -46,8 +109,14 @@ model InstallmentSchedule {
   @@unique([planId, installmentNumber])
 }
 
+// -------------------------------------------------------------
+// MAESTRO DE PARTICIPANTES DEL EVENTO
+// -------------------------------------------------------------
+
 model Participant {
   id                   String        @id @default(cuid())
+  eventId              String?
+  event                Event?        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   rut                  String        @unique
   rutClean             String?       // RUT sin puntos ni guión para búsquedas rápidas
   firstName            String
@@ -86,7 +155,7 @@ model Participant {
   groupLeaderPhone     String?       // Teléfono Contacto del Grupo
   activeRegistrations  String?       // Registro 2024, 2025, 2026, 2027
 
-  // Datos en el Contingente Polonia 2027
+  // Datos en el Contingente / Evento
   contingentRole       String        @default("Participante") // Participante, RESPONSABLE, IST, CMT, Responsable de Patrulla
   status               String        @default("CONFIRMADO")   // CONFIRMADO, PRE_INSCRITO, LISTA_ESPERA, RETIRADO / BAJA
   unitOrPatrol         String?
@@ -125,7 +194,15 @@ model Participant {
   notes                String?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
+
+  @@index([eventId])
+  @@index([rut])
+  @@index([rutClean])
 }
+
+// -------------------------------------------------------------
+// FICHA MÉDICA CLÍNICA Y CÓDIGOS OTP
+// -------------------------------------------------------------
 
 model MedicalRecord {
   id                                String      @id @default(cuid())
@@ -222,11 +299,15 @@ model MedicalVerificationCode {
   @@index([participantId, email])
 }
 
+// -------------------------------------------------------------
+// HISTORIAL DE PAGOS
+// -------------------------------------------------------------
+
 model Payment {
   id                   String       @id @default(cuid())
   participantId        String
   participant          Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  amount               Float        // In USD
+  amount               Float        // En moneda del evento (USD)
   paymentDate          DateTime     @default(now())
   paymentMethod        String       @default("TRANSFERENCIA") // TRANSFERENCIA, TARJETA, EFECTIVO, OTRO
   transactionReference String?      // N° de operación / Documento bancario

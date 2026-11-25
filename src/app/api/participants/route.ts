@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, getActiveEventId } from '@/lib/auth';
 import { calculateFinancialSummary } from '@/lib/finance';
 import { formatRut, cleanRut } from '@/lib/rut';
 
@@ -12,6 +12,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url);
+    const paramEventId = searchParams.get('eventId');
+    const activeEventId = paramEventId || (await getActiveEventId());
     const search = searchParams.get('search')?.trim().toLowerCase() || '';
     const role = searchParams.get('role')?.trim() || '';
     const status = searchParams.get('status')?.trim() || '';
@@ -20,6 +22,9 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
 
     const where: any = {};
+    if (activeEventId) {
+      where.eventId = activeEventId;
+    }
 
     if (role && role !== 'ALL') {
       if (role === 'JOVEN') {
@@ -135,6 +140,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    const activeEventId = body.eventId || (await getActiveEventId());
 
     const {
       rut,
@@ -200,11 +206,17 @@ export async function POST(req: NextRequest) {
       roleKey = 'CMT';
     }
 
-    const plan = await prisma.paymentPlan.findUnique({ where: { roleKey } });
+    const plan = await prisma.paymentPlan.findFirst({
+      where: {
+        roleKey,
+        ...(activeEventId ? { eventId: activeEventId } : {}),
+      },
+    });
 
     const newParticipant = await prisma.participant.create({
       data: {
-        id: `p_${cleanedRut.toLowerCase()}`,
+        id: `p_${cleanedRut.toLowerCase()}_${Date.now()}`,
+        eventId: activeEventId,
         rut: formattedRut,
         rutClean: cleanedRut,
         firstName: firstName.trim(),
