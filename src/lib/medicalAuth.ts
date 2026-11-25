@@ -1,10 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { SignJWT, jwtVerify } from 'jose';
 import crypto from 'crypto';
-
-const MEDICAL_JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'agsch-jamboree-poland-2027-super-secret-key-32chars!'
-);
+import { getJwtSecret } from '@/lib/jwtConfig';
 
 export interface MedicalAuthTokenPayload {
   participantId: string;
@@ -13,11 +10,17 @@ export interface MedicalAuthTokenPayload {
   scope: 'MEDICAL_EDIT' | 'MEDICAL_VIEW';
 }
 
+export interface OtpChallengePayload {
+  participantId: string;
+  email: string;
+  scope: 'MEDICAL_OTP_CHALLENGE';
+}
+
 /**
- * Genera un código OTP aleatorio de 6 dígitos
+ * Genera un código OTP aleatorio de 6 dígitos (100000 - 999999 inclusive)
  */
 export function generateOtpCode(): string {
-  return crypto.randomInt(100000, 999999).toString();
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 /**
@@ -28,11 +31,12 @@ export async function createMedicalVerificationCode(params: {
   email: string;
   ipAddress?: string;
 }): Promise<{ code: string; expiresAt: Date }> {
-  // Invalidar códigos previos activos para este participante y correo
+  const normalizedEmail = params.email.toLowerCase().trim();
+
+  // Invalidar todos los códigos previos no usados de este participante
   await prisma.medicalVerificationCode.updateMany({
     where: {
       participantId: params.participantId,
-      email: params.email.toLowerCase().trim(),
       usedAt: null,
     },
     data: {
@@ -46,7 +50,7 @@ export async function createMedicalVerificationCode(params: {
   await prisma.medicalVerificationCode.create({
     data: {
       participantId: params.participantId,
-      email: params.email.toLowerCase().trim(),
+      email: normalizedEmail,
       code,
       expiresAt,
       ipAddress: params.ipAddress || null,
@@ -63,7 +67,7 @@ export async function createMedicalVerificationCode(params: {
 }
 
 /**
- * Valida un código OTP
+ * Valida un código OTP de forma atómica para evitar uso concurrente doble
  */
 export async function verifyMedicalCode(params: {
   participantId: string;
@@ -89,13 +93,46 @@ export async function verifyMedicalCode(params: {
     return false;
   }
 
-  // Marcar como utilizado
-  await prisma.medicalVerificationCode.update({
-    where: { id: record.id },
+  const result = await prisma.medicalVerificationCode.updateMany({
+    where: { id: record.id, usedAt: null },
     data: { usedAt: new Date() },
   });
 
-  return true;
+  return result.count === 1;
+}
+
+/**
+ * Genera un token firmado de desafío OTP (válido por 15 minutos)
+ */
+export async function createOtpChallengeToken(payload: OtpChallengePayload): Promise<string> {
+  return await new SignJWT({ ...payload })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('15m')
+    .sign(getJwtSecret());
+}
+
+/**
+ * Verifica un token de desafío OTP
+ */
+export async function verifyOtpChallengeToken(token: string): Promise<OtpChallengePayload | null> {
+  try {
+    const { payload } = await jwtVerify(token, getJwtSecret());
+    if (
+      !payload.participantId ||
+      !payload.email ||
+      payload.scope !== 'MEDICAL_OTP_CHALLENGE'
+    ) {
+      return null;
+    }
+    return {
+      participantId: payload.participantId as string,
+      email: payload.email as string,
+      scope: 'MEDICAL_OTP_CHALLENGE',
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -106,7 +143,7 @@ export async function createMedicalEditToken(payload: MedicalAuthTokenPayload): 
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('2h') // Válido por 2 horas para completar la ficha
-    .sign(MEDICAL_JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 /**
@@ -114,13 +151,18 @@ export async function createMedicalEditToken(payload: MedicalAuthTokenPayload): 
  */
 export async function verifyMedicalEditToken(token: string): Promise<MedicalAuthTokenPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, MEDICAL_JWT_SECRET);
-    if (!payload.participantId || !payload.scope) return null;
+    const { payload } = await jwtVerify(token, getJwtSecret());
+    if (
+      !payload.participantId ||
+      (payload.scope !== 'MEDICAL_EDIT' && payload.scope !== 'MEDICAL_VIEW')
+    ) {
+      return null;
+    }
     return {
       participantId: payload.participantId as string,
       rut: payload.rut as string,
       email: payload.email as string,
-      scope: payload.scope as 'MEDICAL_EDIT' | 'MEDICAL_VIEW',
+      scope: payload.scope,
     };
   } catch {
     return null;

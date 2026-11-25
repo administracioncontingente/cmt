@@ -4,37 +4,36 @@
   --color-agsch-blue-deep: #000c33;
   --color-agsch-blue-primary: #001558;
   --color-agsch-blue-surface: #031c6a;
-  --color-agsch-blue-card: #05237e;
-  --color-agsch-blue-border: #0d349e;
   --color-agsch-yellow-primary: #FEB135;
   --color-agsch-yellow-hover: #e59c22;
-  --color-agsch-yellow-light: #fff4e0;
-  --font-sans: 'Nunito Sans', 'Lato', system-ui, -apple-system, sans-serif;
+  --color-agsch-yellow-light: #FFFBF0;
+  --color-agsch-bg-light: #F5F6F8;
+  --font-sans: var(--font-nunito-sans), 'Nunito Sans', system-ui, -apple-system, sans-serif;
 }
 
 :root {
-  --background: #000c33;
-  --foreground: #f8fafc;
+  --background: #F5F6F8;
+  --foreground: #1e293b;
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: 'Nunito Sans', 'Lato', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
 }
 
-/* Custom scrollbar for deep navy UI */
+/* Custom subtle light scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #001558;
+  background: #F5F6F8;
 }
 ::-webkit-scrollbar-thumb {
-  background: #0d349e;
+  background: #cbd5e1;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #FEB135;
+  background: #001558;
 }

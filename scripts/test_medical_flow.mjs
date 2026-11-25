@@ -1,6 +1,5 @@
 import { PrismaClient } from '@prisma/client';
 import { translateCompleteMedicalRecord } from '../src/lib/medicalTranslation.ts';
-import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 

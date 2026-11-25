@@ -225,7 +225,6 @@ async function main() {
   console.log(`Se encontraron ${paymentRows.length} registros de pagos/abonos.`);
 
   const paymentData = [];
-  let matchedCount = 0;
   let skippedInternalCount = 0;
 
   for (const row of paymentRows) {
@@ -250,7 +249,6 @@ async function main() {
       notes: safeStr(row['Distrito-Grupo']) ? `Distrito-Grupo: ${safeStr(row['Distrito-Grupo'])}` : null,
       registeredById: adminUser.id,
     });
-    matchedCount++;
   }
 
   console.log(`💾 Insertando ${paymentData.length} pagos reales asociados a participantes...`);

@@ -1,13 +1,25 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { prisma } from './prisma';
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'agsch-jamboree-poland-2027-super-secret-key-32chars!'
-);
+import { getJwtSecret } from './jwtConfig';
 
 export const SESSION_COOKIE_NAME = 'agsch_session';
 export const ACTIVE_EVENT_COOKIE = 'agsch_active_event_id';
+
+export const ALLOWED_EVENT_ROLES = [
+  'EVENT_ADMIN',
+  'TREASURER',
+  'COORDINATOR',
+  'MEDICAL_STAFF',
+  'VIEWER',
+] as const;
+
+export type AllowedEventRole = (typeof ALLOWED_EVENT_ROLES)[number];
+
+/** Type guard verifying that a string is a supported event membership role. */
+export function isValidEventRole(role: string): role is AllowedEventRole {
+  return (ALLOWED_EVENT_ROLES as readonly string[]).includes(role);
+}
 
 export interface EventRoleInfo {
   eventId: string;
@@ -32,12 +44,12 @@ export async function createSessionToken(payload: UserSession): Promise<string> 
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function verifySessionToken(token: string): Promise<UserSession | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return {
       id: payload.id as string,
       email: payload.email as string,
@@ -54,7 +66,7 @@ export async function getCurrentUser(): Promise<UserSession | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
-  
+
   const session = await verifySessionToken(token);
   if (!session) return null;
 
@@ -146,6 +158,8 @@ export function getEventPermissions(user: UserSession, eventId: string) {
   const canManageFinance = isSuperAdmin || eventRole === 'EVENT_ADMIN' || eventRole === 'TREASURER';
   const canManageMedical = isSuperAdmin || eventRole === 'EVENT_ADMIN' || eventRole === 'MEDICAL_STAFF';
   const canEditParticipants = isSuperAdmin || eventRole === 'EVENT_ADMIN' || eventRole === 'COORDINATOR';
+  const canManageCrm = isSuperAdmin || (Boolean(membership) && eventRole !== 'VIEWER');
+  const canDeleteParticipants = isEventAdmin;
   const canView = isSuperAdmin || Boolean(membership);
 
   return {
@@ -154,8 +168,83 @@ export function getEventPermissions(user: UserSession, eventId: string) {
     canManageFinance,
     canManageMedical,
     canEditParticipants,
+    canManageCrm,
+    canDeleteParticipants,
     canView,
     role: isSuperAdmin ? 'SUPER_ADMIN' : eventRole || 'NONE',
     title: membership?.title || (isSuperAdmin ? 'Administrador Global' : 'Sin rol'),
   };
+}
+
+/**
+ * Resolves an authorized active event ID for the given user.
+ * When requestedEventId is provided, verifies access and flags forbidden=true if unauthorized.
+ */
+export async function resolveAuthorizedEventId(
+  user: UserSession,
+  requestedEventId?: string | null
+): Promise<{ eventId: string | null; forbidden: boolean }> {
+  const isSuperAdmin = user.role === 'SUPER_ADMIN';
+
+  if (requestedEventId) {
+    if (!isSuperAdmin && !getEventPermissions(user, requestedEventId).canView) {
+      return { eventId: null, forbidden: true };
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id: requestedEventId },
+      select: { id: true },
+    });
+
+    if (!event) {
+      return { eventId: null, forbidden: false };
+    }
+
+    if (!getEventPermissions(user, event.id).canView) {
+      return { eventId: null, forbidden: true };
+    }
+
+    return { eventId: event.id, forbidden: false };
+  }
+
+  const cookieStore = await cookies();
+  const activeFromCookie = cookieStore.get(ACTIVE_EVENT_COOKIE)?.value;
+  if (activeFromCookie) {
+    const cookieEvent = await prisma.event.findFirst({
+      where: { id: activeFromCookie, isActive: true },
+      select: { id: true },
+    });
+    if (cookieEvent && getEventPermissions(user, cookieEvent.id).canView) {
+      return { eventId: cookieEvent.id, forbidden: false };
+    }
+  }
+
+  const allowedEventIds = (user.eventRoles || []).map((r) => r.eventId);
+  if (!isSuperAdmin && allowedEventIds.length === 0) {
+    return { eventId: null, forbidden: false };
+  }
+
+  const defaultEvent = await prisma.event.findFirst({
+    where: {
+      isDefault: true,
+      isActive: true,
+      ...(isSuperAdmin ? {} : { id: { in: allowedEventIds } }),
+    },
+    select: { id: true },
+  });
+
+  if (defaultEvent && getEventPermissions(user, defaultEvent.id).canView) {
+    return { eventId: defaultEvent.id, forbidden: false };
+  }
+
+  const fallbackEvent = await prisma.event.findFirst({
+    where: {
+      isActive: true,
+      ...(isSuperAdmin ? {} : { id: { in: allowedEventIds } }),
+    },
+    orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
+    select: { id: true },
+  });
+
+  return { eventId: fallbackEvent?.id || null, forbidden: false };
 }

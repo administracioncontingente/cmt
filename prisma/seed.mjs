@@ -84,7 +84,7 @@ async function main() {
     },
   });
 
-  const planCMT = await prisma.paymentPlan.create({
+  await prisma.paymentPlan.create({
     data: {
       roleKey: 'CMT',
       name: 'Plan CMT (Equipo de Gestión del Contingente)',
@@ -106,7 +106,7 @@ async function main() {
 
   // 4. Sample Participants
   // Participant 1: Camila Sepulveda (Al día: 2 cuotas pagadas = $1200)
-  const p1 = await prisma.participant.create({
+  await prisma.participant.create({
     data: {
       rut: '21.345.678-4',
       firstName: 'Camila',
@@ -152,7 +152,7 @@ async function main() {
   });
 
   // Participant 2: Matías Morales (En mora: pagó Cuota 1, pero Cuota 2 venció)
-  const p2 = await prisma.participant.create({
+  await prisma.participant.create({
     data: {
       rut: '20.890.123-0',
       firstName: 'Matías',
@@ -189,7 +189,7 @@ async function main() {
   });
 
   // Participant 3: Valentina Castro (IST - Al día)
-  const p3 = await prisma.participant.create({
+  await prisma.participant.create({
     data: {
       rut: '18.765.432-7',
       firstName: 'Valentina',
@@ -224,7 +224,7 @@ async function main() {
   });
 
   // Participant 4: Rodrigo Silva (Dirigente - Al día)
-  const p4 = await prisma.participant.create({
+  await prisma.participant.create({
     data: {
       rut: '16.543.210-K',
       firstName: 'Rodrigo',
@@ -267,7 +267,7 @@ async function main() {
   });
 
   // Participant 5: Benjamín Araya (Preinscrito - Sin pagos aún / En mora de Cuota 1)
-  const p5 = await prisma.participant.create({
+  await prisma.participant.create({
     data: {
       rut: '22.109.876-5',
       firstName: 'Benjamín',

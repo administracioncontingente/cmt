@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { cleanRut } from '@/lib/rut';
 
@@ -44,7 +45,7 @@ export async function matchParticipantForMessage(
   const byParticipantEmail = await prisma.participant.findFirst({
     where: {
       eventId,
-      email: cleanSender,
+      email: { equals: cleanSender, mode: 'insensitive' },
     },
     select: { id: true },
   });
@@ -57,7 +58,7 @@ export async function matchParticipantForMessage(
   const byGuardianEmail = await prisma.participant.findFirst({
     where: {
       eventId,
-      guardianEmail: cleanSender,
+      guardianEmail: { equals: cleanSender, mode: 'insensitive' },
     },
     select: { id: true },
   });
@@ -74,7 +75,10 @@ export async function matchParticipantForMessage(
     const byRut = await prisma.participant.findFirst({
       where: {
         eventId,
-        OR: [{ rutClean: rut }, { rut: { contains: rut } }],
+        OR: [
+          { rutClean: { equals: rut, mode: 'insensitive' } },
+          { rut: { contains: rut, mode: 'insensitive' } },
+        ],
       },
       select: { id: true },
     });
@@ -173,7 +177,7 @@ export async function seedSampleInboxMessages(eventId: string) {
 
   const sampleMessages: SyncedMessageData[] = [
     {
-      googleMessageId: `gmail_msg_001_${Date.now()}`,
+      googleMessageId: `gmail_msg_001_${crypto.randomUUID().slice(0, 8)}`,
       googleThreadId: 'thread_finanzas_001',
       senderEmail: p1 ? p1.email : 'apoderado.sepulveda@gmail.com',
       senderName: p1 ? `${p1.firstName} ${p1.lastName}` : 'Carlos Sepúlveda (Apoderado)',
@@ -186,7 +190,7 @@ export async function seedSampleInboxMessages(eventId: string) {
       labels: ['INBOX', 'FINANZAS', 'IMPORTANTE'],
     },
     {
-      googleMessageId: `gmail_msg_002_${Date.now()}`,
+      googleMessageId: `gmail_msg_002_${crypto.randomUUID().slice(0, 8)}`,
       googleThreadId: 'thread_medica_002',
       senderEmail: p2?.guardianEmail || (p2 ? p2.email : 'carlos.morales@empresa.cl'),
       senderName: p2?.guardianName || 'Carlos Morales Pinto',
@@ -199,7 +203,7 @@ export async function seedSampleInboxMessages(eventId: string) {
       labels: ['INBOX', 'SALUD', 'URGENTE'],
     },
     {
-      googleMessageId: `gmail_msg_003_${Date.now()}`,
+      googleMessageId: `gmail_msg_003_${crypto.randomUUID().slice(0, 8)}`,
       googleThreadId: 'thread_legal_003',
       senderEmail: 'contacto.familiar@scout.cl',
       senderName: 'Patricia Donoso',
@@ -212,7 +216,7 @@ export async function seedSampleInboxMessages(eventId: string) {
       labels: ['INBOX', 'DOCUMENTACION'],
     },
     {
-      googleMessageId: `gmail_msg_004_${Date.now()}`,
+      googleMessageId: `gmail_msg_004_${crypto.randomUUID().slice(0, 8)}`,
       googleThreadId: 'thread_general_004',
       senderEmail: 'consulta.general@gmail.com',
       senderName: 'Familia Scout',
