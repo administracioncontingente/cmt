@@ -5,8 +5,8 @@ export default function FichaMedicaByIdPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#000c33] flex items-center justify-center text-white font-sans">
-          Cargando ficha médica...
+        <div className="min-h-screen bg-[#F5F6F8] flex items-center justify-center text-[#001558] font-bold font-sans text-sm">
+          Cargando ficha médica oficial...
         </div>
       }
     >
