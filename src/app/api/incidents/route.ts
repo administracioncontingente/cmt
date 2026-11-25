@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser, getActiveEventId } from '@/lib/auth';
+import {
+  getCurrentUser,
+  getEventPermissions,
+  resolveAuthorizedEventId,
+} from '@/lib/auth';
+import { apiErrorResponse } from '@/lib/apiUtils';
+import {
+  createIncidentWithUniqueTicket,
+  isValidIncidentCategory,
+  isValidIncidentPriority,
+} from '@/lib/incidents';
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -11,10 +22,30 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const paramEventId = searchParams.get('eventId');
-    const activeEventId = paramEventId || (await getActiveEventId());
+    const { eventId: activeEventId, forbidden } = await resolveAuthorizedEventId(
+      user,
+      paramEventId
+    );
+
+    if (forbidden) {
+      return NextResponse.json(
+        { error: 'No tienes acceso al evento solicitado' },
+        { status: 403 }
+      );
+    }
 
     if (!activeEventId) {
-      return NextResponse.json({ incidents: [] });
+      return NextResponse.json({
+        incidents: [],
+        metrics: { total: 0, ABIERTA: 0, EN_PROCESO: 0, RESUELTA: 0, CERRADA: 0 },
+      });
+    }
+
+    if (!getEventPermissions(user, activeEventId).canView) {
+      return NextResponse.json(
+        { error: 'No tienes permisos para ver incidencias de este evento' },
+        { status: 403 }
+      );
     }
 
     const participantId = searchParams.get('participantId');
@@ -23,7 +54,7 @@ export async function GET(req: NextRequest) {
     const priority = searchParams.get('priority');
     const search = searchParams.get('search')?.trim().toLowerCase() || '';
 
-    const where: any = { eventId: activeEventId };
+    const where: Prisma.IncidentWhereInput = { eventId: activeEventId };
 
     if (participantId) where.participantId = participantId;
     if (status && status !== 'ALL') where.status = status;
@@ -79,23 +110,34 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const statusCounts = {
-      ABIERTA: await prisma.incident.count({ where: { eventId: activeEventId, status: 'ABIERTA' } }),
-      EN_PROCESO: await prisma.incident.count({ where: { eventId: activeEventId, status: 'EN_PROCESO' } }),
-      RESUELTA: await prisma.incident.count({ where: { eventId: activeEventId, status: 'RESUELTA' } }),
-      CERRADA: await prisma.incident.count({ where: { eventId: activeEventId, status: 'CERRADA' } }),
-    };
+    const [abiertaCount, enProcesoCount, resueltaCount, cerradaCount] =
+      await Promise.all([
+        prisma.incident.count({
+          where: { eventId: activeEventId, status: 'ABIERTA' },
+        }),
+        prisma.incident.count({
+          where: { eventId: activeEventId, status: 'EN_PROCESO' },
+        }),
+        prisma.incident.count({
+          where: { eventId: activeEventId, status: 'RESUELTA' },
+        }),
+        prisma.incident.count({
+          where: { eventId: activeEventId, status: 'CERRADA' },
+        }),
+      ]);
 
     return NextResponse.json({
       incidents,
       metrics: {
         total: incidents.length,
-        ...statusCounts,
+        ABIERTA: abiertaCount,
+        EN_PROCESO: enProcesoCount,
+        RESUELTA: resueltaCount,
+        CERRADA: cerradaCount,
       },
     });
-  } catch (error: any) {
-    console.error('Error fetching incidents:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al obtener las incidencias');
   }
 }
 
@@ -106,18 +148,36 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const {
-      eventId: paramEventId,
-      participantId,
-      title,
-      description,
-      category,
-      priority,
-      assignedToId,
-    } = body;
+    const body = (await req.json()) as {
+      eventId?: unknown;
+      participantId?: unknown;
+      title?: unknown;
+      description?: unknown;
+      category?: unknown;
+      priority?: unknown;
+      assignedToId?: unknown;
+    };
 
-    const activeEventId = paramEventId || (await getActiveEventId());
+    const paramEventId =
+      typeof body.eventId === 'string' && body.eventId.trim()
+        ? body.eventId.trim()
+        : undefined;
+
+    const { eventId: activeEventId, forbidden } = await resolveAuthorizedEventId(
+      user,
+      paramEventId
+    );
+
+    if (forbidden) {
+      return NextResponse.json(
+        { error: 'No tienes acceso al evento solicitado' },
+        { status: 403 }
+      );
+    }
+
+    const participantId =
+      typeof body.participantId === 'string' ? body.participantId.trim() : '';
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
 
     if (!activeEventId || !participantId || !title) {
       return NextResponse.json(
@@ -126,47 +186,107 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const count = await prisma.incident.count({ where: { eventId: activeEventId } });
-    const year = new Date().getFullYear();
-    const ticketNumber = `INC-${year}-${String(count + 1).padStart(3, '0')}`;
+    if (!getEventPermissions(user, activeEventId).canManageCrm) {
+      return NextResponse.json(
+        { error: 'No tienes permisos para crear incidencias en este evento' },
+        { status: 403 }
+      );
+    }
 
-    const incident = await prisma.incident.create({
-      data: {
-        ticketNumber,
-        eventId: activeEventId,
-        participantId,
-        title: title.trim(),
-        description: description?.trim() || '',
-        category: category || 'CONSULTA_GENERAL',
-        priority: priority || 'MEDIA',
-        status: 'ABIERTA',
-        assignedToId: assignedToId || user.id,
-        createdById: user.id,
-        comments: {
-          create: {
-            userId: user.id,
-            authorName: user.name,
-            content: 'Incidencia creada en el sistema.',
-            isInternal: true,
-          },
-        },
-      },
-      include: {
-        participant: {
-          select: { id: true, rut: true, firstName: true, lastName: true },
-        },
-        assignedTo: {
-          select: { id: true, name: true, email: true },
-        },
-      },
+    const participant = await prisma.participant.findUnique({
+      where: { id: participantId },
+      select: { id: true, eventId: true },
     });
+
+    if (!participant) {
+      return NextResponse.json(
+        { error: 'Participante no encontrado' },
+        { status: 404 }
+      );
+    }
+
+    if (participant.eventId !== activeEventId) {
+      return NextResponse.json(
+        { error: 'El participante no pertenece al evento seleccionado' },
+        { status: 400 }
+      );
+    }
+
+    let resolvedCategory = 'CONSULTA_GENERAL';
+    if (body.category !== undefined && body.category !== null && body.category !== '') {
+      if (typeof body.category !== 'string' || !isValidIncidentCategory(body.category)) {
+        return NextResponse.json(
+          { error: 'Categoría de incidencia inválida' },
+          { status: 400 }
+        );
+      }
+      resolvedCategory = body.category;
+    }
+
+    let resolvedPriority = 'MEDIA';
+    if (body.priority !== undefined && body.priority !== null && body.priority !== '') {
+      if (typeof body.priority !== 'string' || !isValidIncidentPriority(body.priority)) {
+        return NextResponse.json(
+          { error: 'Prioridad de incidencia inválida' },
+          { status: 400 }
+        );
+      }
+      resolvedPriority = body.priority;
+    }
+
+    const description =
+      typeof body.description === 'string' ? body.description.trim() : '';
+    const assignedToId =
+      typeof body.assignedToId === 'string' && body.assignedToId.trim()
+        ? body.assignedToId.trim()
+        : user.id;
+
+    const incident = await createIncidentWithUniqueTicket(
+      activeEventId,
+      async (ticketNumber) =>
+        prisma.incident.create({
+          data: {
+            ticketNumber,
+            eventId: activeEventId,
+            participantId,
+            title,
+            description,
+            category: resolvedCategory,
+            priority: resolvedPriority,
+            status: 'ABIERTA',
+            assignedToId,
+            createdById: user.id,
+            comments: {
+              create: {
+                userId: user.id,
+                authorName: user.name,
+                content: 'Incidencia creada en el sistema.',
+                isInternal: true,
+              },
+            },
+          },
+          include: {
+            participant: {
+              select: {
+                id: true,
+                rut: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+            assignedTo: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        })
+    );
 
     return NextResponse.json({
       message: `Incidencia ${incident.ticketNumber} registrada exitosamente`,
       incident,
     });
-  } catch (error: any) {
-    console.error('Error creating incident:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al crear la incidencia');
   }
 }

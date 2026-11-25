@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cleanRut, formatRut } from '@/lib/rut';
-import { createMedicalVerificationCode } from '@/lib/medicalAuth';
+import {
+  createMedicalVerificationCode,
+  createOtpChallengeToken,
+} from '@/lib/medicalAuth';
+import { apiErrorResponse } from '@/lib/apiUtils';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as { rut?: unknown; email?: unknown };
     const { rut, email } = body;
 
     if (!rut || typeof rut !== 'string') {
@@ -51,7 +55,8 @@ export async function POST(req: NextRequest) {
     let targetEmail: string | null = null;
     let targetRole: 'APODERADO' | 'PARTICIPANTE' = 'APODERADO';
 
-    const normalizedInputEmail = (email || '').toLowerCase().trim();
+    const normalizedInputEmail =
+      typeof email === 'string' ? email.toLowerCase().trim() : '';
     const pGuardianEmail = (participant.guardianEmail || '').toLowerCase().trim();
     const pParticipantEmail = (participant.email || '').toLowerCase().trim();
 
@@ -93,11 +98,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Generar OTP y enviar correo
-    const clientIp = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || undefined;
+    const clientIp =
+      req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || undefined;
     const { code, expiresAt } = await createMedicalVerificationCode({
       participantId: participant.id,
       email: targetEmail,
       ipAddress: clientIp,
+    });
+
+    const challengeToken = await createOtpChallengeToken({
+      participantId: participant.id,
+      email: targetEmail,
+      scope: 'MEDICAL_OTP_CHALLENGE',
     });
 
     // Enmascarar el correo para privacidad (ej: j***z@gmail.com)
@@ -105,26 +117,22 @@ export async function POST(req: NextRequest) {
     const maskedLocal =
       localPart.length > 2
         ? `${localPart[0]}***${localPart[localPart.length - 1]}`
-        : `${localPart[0]}***`;
-    const maskedEmail = `${maskedLocal}@${domainPart}`;
+        : `${localPart[0] || ''}***`;
+    const maskedEmail = `${maskedLocal}@${domainPart || ''}`;
 
     return NextResponse.json({
       success: true,
       participantId: participant.id,
       participantName: `${participant.firstName} ${participant.lastName}`,
       maskedEmail,
-      targetEmail,
+      challengeToken,
       targetRole,
       expiresAt: expiresAt.toISOString(),
       // debugCode se incluye en respuesta para testing directo durante desarrollo
       debugCode: process.env.NODE_ENV !== 'production' ? code : undefined,
       message: `Código de verificación enviado con éxito a ${maskedEmail}`,
     });
-  } catch (error: any) {
-    console.error('Error al solicitar código OTP médico:', error);
-    return NextResponse.json(
-      { error: error.message || 'Error interno al procesar la solicitud' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error interno al procesar la solicitud');
   }
 }

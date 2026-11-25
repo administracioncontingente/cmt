@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser, getActiveEventId } from '@/lib/auth';
+import {
+  getCurrentUser,
+  getEventPermissions,
+  resolveAuthorizedEventId,
+} from '@/lib/auth';
 import { seedSampleInboxMessages } from '@/lib/inboxSync';
+import { apiErrorResponse } from '@/lib/apiUtils';
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -12,17 +18,38 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const paramEventId = searchParams.get('eventId');
-    const activeEventId = paramEventId || (await getActiveEventId());
+    const { eventId: activeEventId, forbidden } = await resolveAuthorizedEventId(
+      user,
+      paramEventId
+    );
+
+    if (forbidden) {
+      return NextResponse.json(
+        { error: 'No tienes acceso al evento solicitado' },
+        { status: 403 }
+      );
+    }
 
     if (!activeEventId) {
-      return NextResponse.json({ messages: [], count: 0 });
+      return NextResponse.json({
+        messages: [],
+        count: 0,
+        metrics: { total: 0, associated: 0, unassociated: 0, tickets: 0 },
+      });
+    }
+
+    if (!getEventPermissions(user, activeEventId).canView) {
+      return NextResponse.json(
+        { error: 'No tienes permisos para ver el inbox de este evento' },
+        { status: 403 }
+      );
     }
 
     const participantId = searchParams.get('participantId');
     const filter = searchParams.get('filter'); // 'all', 'associated', 'unassociated', 'tickets'
     const search = searchParams.get('search')?.trim().toLowerCase() || '';
 
-    const where: any = { eventId: activeEventId };
+    const where: Prisma.EmailMessageWhereInput = { eventId: activeEventId };
 
     if (participantId) {
       where.participantId = participantId;
@@ -81,13 +108,15 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const totalCount = await prisma.emailMessage.count({ where: { eventId: activeEventId } });
-    const associatedCount = await prisma.emailMessage.count({
-      where: { eventId: activeEventId, participantId: { not: null } },
-    });
-    const ticketCount = await prisma.emailMessage.count({
-      where: { eventId: activeEventId, ticketId: { not: null } },
-    });
+    const [totalCount, associatedCount, ticketCount] = await Promise.all([
+      prisma.emailMessage.count({ where: { eventId: activeEventId } }),
+      prisma.emailMessage.count({
+        where: { eventId: activeEventId, participantId: { not: null } },
+      }),
+      prisma.emailMessage.count({
+        where: { eventId: activeEventId, ticketId: { not: null } },
+      }),
+    ]);
 
     return NextResponse.json({
       messages,
@@ -98,9 +127,8 @@ export async function GET(req: NextRequest) {
         tickets: ticketCount,
       },
     });
-  } catch (error: any) {
-    console.error('Error fetching inbox messages:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al obtener mensajes del inbox');
   }
 }
 
@@ -112,15 +140,38 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
-    const paramEventId = body.eventId;
-    const activeEventId = paramEventId || (await getActiveEventId());
+    const body = (await req.json().catch(() => ({}))) as { eventId?: unknown };
+    const paramEventId =
+      typeof body.eventId === 'string' && body.eventId.trim()
+        ? body.eventId.trim()
+        : undefined;
 
-    if (!activeEventId) {
-      return NextResponse.json({ error: 'No hay evento activo seleccionado' }, { status: 400 });
+    const { eventId: activeEventId, forbidden } = await resolveAuthorizedEventId(
+      user,
+      paramEventId
+    );
+
+    if (forbidden) {
+      return NextResponse.json(
+        { error: 'No tienes acceso al evento solicitado' },
+        { status: 403 }
+      );
     }
 
-    // Si se solicita simulación o no hay token en vivo
+    if (!activeEventId) {
+      return NextResponse.json(
+        { error: 'No hay evento activo seleccionado' },
+        { status: 400 }
+      );
+    }
+
+    if (!getEventPermissions(user, activeEventId).canManageCrm) {
+      return NextResponse.json(
+        { error: 'No tienes permisos para sincronizar el inbox en este evento' },
+        { status: 403 }
+      );
+    }
+
     const synced = await seedSampleInboxMessages(activeEventId);
 
     return NextResponse.json({
@@ -128,8 +179,7 @@ export async function POST(req: NextRequest) {
       syncedCount: synced.length,
       messages: synced,
     });
-  } catch (error: any) {
-    console.error('Error syncing inbox:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al sincronizar el inbox');
   }
 }
