@@ -1,10 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, resolveAuthorizedEventId, getEventPermissions } from '@/lib/auth';
 import { formatRut, cleanRut, validateRut } from '@/lib/rut';
+import { normalizeRoleKey } from '@/lib/roles';
+import { apiErrorResponse, getErrorMessage, parseOptionalDate } from '@/lib/apiUtils';
+import type { ImportErrorRow } from '@/types/domain';
 import * as XLSX from 'xlsx';
 
-export async function GET(req: NextRequest) {
+interface MappedImportRow {
+  rut?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  birthDate?: unknown;
+  gender?: string;
+  contingentRole?: string;
+  status?: string;
+  scoutZone?: string;
+  scoutDistrict?: string;
+  scoutGroup?: string;
+  unitOrPatrol?: string;
+  guardianName?: string;
+  guardianRelationship?: string;
+  guardianPhone?: string;
+  guardianEmail?: string;
+  dietaryRestrictions?: string;
+  medicalNotes?: string;
+  notes?: string;
+}
+
+export async function GET() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -65,7 +91,33 @@ export async function POST(req: NextRequest) {
 
   try {
     const formData = await req.formData();
-    const file = formData.get('file') as File | null;
+    const requestedEventId = formData.get('eventId')?.toString() || null;
+    const { eventId: activeEventId, forbidden } = await resolveAuthorizedEventId(
+      user,
+      requestedEventId
+    );
+
+    if (forbidden) {
+      return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
+    }
+
+    if (!activeEventId) {
+      return NextResponse.json(
+        { error: 'Se requiere un evento activo para importar participantes' },
+        { status: 400 }
+      );
+    }
+
+    const permissions = getEventPermissions(user, activeEventId);
+    if (!permissions.canEditParticipants) {
+      return NextResponse.json(
+        { error: 'No tienes permisos para importar participantes en este evento' },
+        { status: 403 }
+      );
+    }
+
+    const fileEntry = formData.get('file');
+    const file = fileEntry instanceof File ? fileEntry : null;
 
     if (!file) {
       return NextResponse.json(
@@ -87,7 +139,7 @@ export async function POST(req: NextRequest) {
     }
 
     const worksheet = workbook.Sheets[firstSheetName];
-    const rawRows: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet, {
+    const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
       defval: '',
     });
 
@@ -98,26 +150,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Pre-cargar planes de pago existentes
-    const plans = await prisma.paymentPlan.findMany();
+    // Pre-cargar planes de pago del evento activo
+    const plans = await prisma.paymentPlan.findMany({
+      where: { eventId: activeEventId },
+    });
     const planMap = new Map(plans.map((p) => [p.roleKey, p.id]));
 
     let importedCount = 0;
     let updatedCount = 0;
-    const errors: { row: number; rut?: string; reason: string }[] = [];
+    const errors: ImportErrorRow[] = [];
 
     for (let i = 0; i < rawRows.length; i++) {
       const row = rawRows[i];
       const rowNumber = i + 2; // Considerando cabecera en fila 1
 
       // Mapear campos normalizando claves
-      const mapped: Record<string, any> = {};
+      const mapped: MappedImportRow = {};
       for (const [key, val] of Object.entries(row)) {
         const normKey = normalizeHeader(key);
         if (normKey.includes('rut') || normKey === 'identificador') mapped.rut = String(val).trim();
         else if (normKey.includes('nombre') && !normKey.includes('apoderado')) mapped.firstName = String(val).trim();
         else if (normKey.includes('apellido')) mapped.lastName = String(val).trim();
-        else if (normKey.includes('correo') && !normKey.includes('apoderado') || normKey === 'email') mapped.email = String(val).trim();
+        else if ((normKey.includes('correo') && !normKey.includes('apoderado')) || normKey === 'email') mapped.email = String(val).trim();
         else if (normKey.includes('telefono') && !normKey.includes('apoderado')) mapped.phone = String(val).trim();
         else if (normKey.includes('nacimiento') || normKey.includes('fechanac')) mapped.birthDate = val;
         else if (normKey.includes('genero') || normKey.includes('sexo')) mapped.gender = String(val).trim().toUpperCase();
@@ -146,17 +200,19 @@ export async function POST(req: NextRequest) {
       }
 
       const cleanedRut = cleanRut(mapped.rut);
+      if (!validateRut(cleanedRut)) {
+        errors.push({
+          row: rowNumber,
+          rut: mapped.rut,
+          reason: 'RUT inválido según verificación Módulo 11',
+        });
+        continue;
+      }
+
       const formattedRut = formatRut(cleanedRut);
 
       // Normalizar Rol
-      let roleKey = 'JOVEN';
-      if (mapped.contingentRole) {
-        const r = mapped.contingentRole.toUpperCase();
-        if (r.includes('DIRIGENTE') || r.includes('EDUCADOR') || r.includes('LEADER')) roleKey = 'DIRIGENTE';
-        else if (r.includes('IST') || r.includes('SERVICIO')) roleKey = 'IST';
-        else if (r.includes('CMT') || r.includes('CONTINGENTE')) roleKey = 'CMT';
-        else roleKey = 'JOVEN';
-      }
+      const roleKey = normalizeRoleKey(mapped.contingentRole);
 
       // Normalizar Estado
       let statusKey = 'PRE_INSCRITO';
@@ -169,17 +225,10 @@ export async function POST(req: NextRequest) {
       }
 
       const planId = planMap.get(roleKey) || null;
-
-      // Normalizar fecha de nacimiento
-      let parsedBirthDate: Date | null = null;
-      if (mapped.birthDate) {
-        const d = new Date(mapped.birthDate);
-        if (!isNaN(d.getTime())) {
-          parsedBirthDate = d;
-        }
-      }
-
-      const email = mapped.email || `${cleanedRut.toLowerCase()}@participante.agsch.cl`;
+      const parsedBirthDate = parseOptionalDate(mapped.birthDate);
+      const email = mapped.email
+        ? mapped.email.toLowerCase()
+        : `${cleanedRut.toLowerCase()}@participante.agsch.cl`;
 
       try {
         const existing = await prisma.participant.findUnique({
@@ -187,12 +236,23 @@ export async function POST(req: NextRequest) {
         });
 
         if (existing) {
+          if (existing.eventId && existing.eventId !== activeEventId) {
+            errors.push({
+              row: rowNumber,
+              rut: formattedRut,
+              reason: 'El RUT pertenece a otro evento y no puede sobrescribirse desde aquí',
+            });
+            continue;
+          }
+
           await prisma.participant.update({
             where: { rut: formattedRut },
             data: {
+              eventId: existing.eventId || activeEventId,
+              rutClean: cleanedRut,
               firstName: mapped.firstName || existing.firstName,
               lastName: mapped.lastName || existing.lastName,
-              email: mapped.email || existing.email,
+              email: mapped.email ? mapped.email.toLowerCase() : existing.email,
               phone: mapped.phone || existing.phone,
               birthDate: parsedBirthDate || existing.birthDate,
               gender: mapped.gender || existing.gender,
@@ -216,7 +276,9 @@ export async function POST(req: NextRequest) {
         } else {
           await prisma.participant.create({
             data: {
+              eventId: activeEventId,
               rut: formattedRut,
+              rutClean: cleanedRut,
               firstName: mapped.firstName,
               lastName: mapped.lastName,
               email,
@@ -241,11 +303,11 @@ export async function POST(req: NextRequest) {
           });
           importedCount++;
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         errors.push({
           row: rowNumber,
           rut: formattedRut,
-          reason: err.message || 'Error al persistir en base de datos',
+          reason: getErrorMessage(err) || 'Error al persistir en base de datos',
         });
       }
     }
@@ -258,11 +320,7 @@ export async function POST(req: NextRequest) {
       errorsCount: errors.length,
       errors,
     });
-  } catch (error) {
-    console.error('Error during bulk import:', error);
-    return NextResponse.json(
-      { error: 'Error al procesar el archivo de importación' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al procesar el archivo de importación', 500);
   }
 }

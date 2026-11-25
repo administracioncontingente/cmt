@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser, getActiveEventId } from '@/lib/auth';
-import { calculateFinancialSummary } from '@/lib/finance';
+import { getCurrentUser, resolveAuthorizedEventId, getEventPermissions } from '@/lib/auth';
+import {
+  calculateFinancialSummary,
+  resolveParticipantTargetAmount,
+  matchesHealthFilter,
+} from '@/lib/finance';
 import { formatRut, cleanRut } from '@/lib/rut';
+import { buildRoleWhereClause, normalizeRoleKey } from '@/lib/roles';
+import { apiErrorResponse, parseOptionalDate, parseOptionalFloat } from '@/lib/apiUtils';
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -13,30 +20,39 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const paramEventId = searchParams.get('eventId');
-    const activeEventId = paramEventId || (await getActiveEventId());
-    const search = searchParams.get('search')?.trim().toLowerCase() || '';
+    const { eventId: activeEventId, forbidden } = await resolveAuthorizedEventId(user, paramEventId);
+
+    if (forbidden) {
+      return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
+    }
+
+    if (!activeEventId) {
+      return NextResponse.json({ participants: [], count: 0 });
+    }
+
+    const permissions = getEventPermissions(user, activeEventId);
+    if (!permissions.canView) {
+      return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
+    }
+
+    const search = searchParams.get('search')?.trim() || '';
     const role = searchParams.get('role')?.trim() || '';
     const status = searchParams.get('status')?.trim() || '';
     const health = searchParams.get('health')?.trim() || '';
-    const limit = parseInt(searchParams.get('limit') || '500', 10);
-    const page = parseInt(searchParams.get('page') || '1', 10);
 
-    const where: any = {};
-    if (activeEventId) {
-      where.eventId = activeEventId;
-    }
+    const rawLimit = searchParams.get('limit');
+    const rawPage = searchParams.get('page');
+    const parsedLimit = rawLimit !== null ? Number.parseInt(rawLimit, 10) : 500;
+    const parsedPage = rawPage !== null ? Number.parseInt(rawPage, 10) : 1;
+    const limit = Number.isFinite(parsedLimit) ? Math.min(1000, Math.max(1, parsedLimit)) : 500;
+    const page = Number.isFinite(parsedPage) ? Math.max(1, parsedPage) : 1;
+
+    const where: Prisma.ParticipantWhereInput = { eventId: activeEventId };
 
     if (role && role !== 'ALL') {
-      if (role === 'JOVEN') {
-        where.contingentRole = { in: ['Participante', 'Responsable de Patrulla', 'JOVEN'] };
-      } else if (role === 'DIRIGENTE') {
-        where.contingentRole = { in: ['RESPONSABLE', 'DIRIGENTE', 'Educador'] };
-      } else if (role === 'IST') {
-        where.contingentRole = 'IST';
-      } else if (role === 'CMT') {
-        where.contingentRole = 'CMT';
-      } else {
-        where.contingentRole = role;
+      const roleFilter = buildRoleWhereClause(role);
+      if (roleFilter.contingentRole !== undefined) {
+        where.contingentRole = roleFilter.contingentRole;
       }
     }
 
@@ -47,20 +63,20 @@ export async function GET(req: NextRequest) {
     if (search) {
       const cleanS = cleanRut(search);
       where.OR = [
-        { firstName: { contains: search } },
-        { lastName: { contains: search } },
-        { secondLastName: { contains: search } },
-        { rut: { contains: search } },
-        { rutClean: { contains: cleanS || search } },
-        { scoutGroup: { contains: search } },
-        { scoutZone: { contains: search } },
-        { scoutDistrict: { contains: search } },
-        { email: { contains: search } },
-        { cupoCode: { contains: search } },
-        { unitName: { contains: search } },
-        { patrolName: { contains: search } },
-        { city: { contains: search } },
-        { commune: { contains: search } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { secondLastName: { contains: search, mode: 'insensitive' } },
+        { rut: { contains: search, mode: 'insensitive' } },
+        { rutClean: { contains: cleanS || search, mode: 'insensitive' } },
+        { scoutGroup: { contains: search, mode: 'insensitive' } },
+        { scoutZone: { contains: search, mode: 'insensitive' } },
+        { scoutDistrict: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { cupoCode: { contains: search, mode: 'insensitive' } },
+        { unitName: { contains: search, mode: 'insensitive' } },
+        { patrolName: { contains: search, mode: 'insensitive' } },
+        { city: { contains: search, mode: 'insensitive' } },
+        { commune: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -92,10 +108,7 @@ export async function GET(req: NextRequest) {
     });
 
     const enriched = participants.map((p) => {
-      const totalAmount = p.targetFeeUSD && p.targetFeeUSD > 0
-        ? p.targetFeeUSD
-        : (p.plan?.totalAmount || 3600);
-
+      const totalAmount = resolveParticipantTargetAmount(p.targetFeeUSD, p.plan?.totalAmount);
       const fin = calculateFinancialSummary(
         p.plan?.installments || [],
         p.payments || [],
@@ -110,25 +123,15 @@ export async function GET(req: NextRequest) {
 
     // Filtro por salud financiera si aplica
     const filtered = health && health !== 'ALL'
-      ? enriched.filter((p) => {
-          if (health === 'AL_DIA') return p.financialStatusSheet === 'Al Día' || p.financial.health === 'AL_DIA';
-          if (health === 'EN_MORA') return p.financialStatusSheet === 'Adeuda' || p.financial.health === 'EN_MORA';
-          if (health === 'PAGADO_TOTAL') return p.financialStatusSheet === 'Total Pagado' || p.financial.health === 'PAGADO_TOTAL';
-          if (health === 'BAJA') return p.financialStatusSheet === 'BAJA' || p.status === 'RETIRADO';
-          return true;
-        })
+      ? enriched.filter((p) => matchesHealthFilter(p, health))
       : enriched;
 
     return NextResponse.json({
       participants: filtered,
       count: filtered.length,
     });
-  } catch (error) {
-    console.error('Error in GET /api/participants:', error);
-    return NextResponse.json(
-      { error: 'Error al obtener la lista de participantes' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al obtener la lista de participantes', 500);
   }
 }
 
@@ -139,44 +142,35 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const activeEventId = body.eventId || (await getActiveEventId());
+    const body = (await req.json()) as Record<string, unknown>;
+    const requestedEventId = typeof body.eventId === 'string' ? body.eventId : null;
+    const { eventId: activeEventId, forbidden } = await resolveAuthorizedEventId(user, requestedEventId);
 
-    const {
-      rut,
-      firstName,
-      lastName,
-      secondLastName,
-      email,
-      phone,
-      birthDate,
-      gender,
-      address,
-      commune,
-      city,
-      nationality,
-      dietaryRestrictions,
-      medicalNotes,
-      guardianName,
-      guardianPhone,
-      guardianEmail,
-      scoutZone,
-      scoutDistrict,
-      scoutGroup,
-      contingentRole,
-      status,
-      unitOrPatrol,
-      cupoCode,
-      unit,
-      unitName,
-      patrol,
-      patrolName,
-      uniformSize,
-      targetFeeUSD,
-      notes,
-    } = body;
+    if (forbidden) {
+      return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
+    }
 
-    if (!rut || !firstName || !lastName || !email) {
+    if (!activeEventId) {
+      return NextResponse.json(
+        { error: 'Se requiere un evento activo para registrar un participante' },
+        { status: 400 }
+      );
+    }
+
+    const permissions = getEventPermissions(user, activeEventId);
+    if (!permissions.canEditParticipants) {
+      return NextResponse.json(
+        { error: 'No tienes permisos para registrar participantes en este evento' },
+        { status: 403 }
+      );
+    }
+
+    const rut = typeof body.rut === 'string' ? body.rut : '';
+    const firstName = typeof body.firstName === 'string' ? body.firstName : '';
+    const lastName = typeof body.lastName === 'string' ? body.lastName : '';
+    const email = typeof body.email === 'string' ? body.email : '';
+
+    if (!rut.trim() || !firstName.trim() || !lastName.trim() || !email.trim()) {
       return NextResponse.json(
         { error: 'RUT, nombres, apellidos y correo son obligatorios' },
         { status: 400 }
@@ -184,6 +178,9 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanedRut = cleanRut(rut);
+    if (cleanedRut.length < 2) {
+      return NextResponse.json({ error: 'RUT inválido' }, { status: 400 });
+    }
     const formattedRut = formatRut(cleanedRut);
 
     const existing = await prisma.participant.findUnique({
@@ -196,22 +193,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const rawRole = contingentRole || 'Participante';
-    let roleKey = 'JOVEN';
-    if (rawRole.toUpperCase().includes('RESPONSABLE') || rawRole.toUpperCase().includes('DIRIGENTE')) {
-      roleKey = 'DIRIGENTE';
-    } else if (rawRole.toUpperCase().includes('IST') || rawRole.toUpperCase().includes('SERVICIO')) {
-      roleKey = 'IST';
-    } else if (rawRole.toUpperCase().includes('CMT') || rawRole.toUpperCase().includes('CONTINGENTE')) {
-      roleKey = 'CMT';
+    let parsedBirthDate: Date | null = null;
+    if (body.birthDate !== undefined && body.birthDate !== null && body.birthDate !== '') {
+      parsedBirthDate = parseOptionalDate(body.birthDate);
+      if (!parsedBirthDate) {
+        return NextResponse.json({ error: 'Fecha de nacimiento inválida' }, { status: 400 });
+      }
     }
+
+    const rawRole = typeof body.contingentRole === 'string' && body.contingentRole.trim()
+      ? body.contingentRole.trim()
+      : 'Participante';
+    const roleKey = normalizeRoleKey(rawRole);
 
     const plan = await prisma.paymentPlan.findFirst({
       where: {
         roleKey,
-        ...(activeEventId ? { eventId: activeEventId } : {}),
+        eventId: activeEventId,
       },
     });
+
+    const optStr = (val: unknown): string | null =>
+      typeof val === 'string' && val.trim() ? val.trim() : null;
 
     const newParticipant = await prisma.participant.create({
       data: {
@@ -221,35 +224,35 @@ export async function POST(req: NextRequest) {
         rutClean: cleanedRut,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        secondLastName: secondLastName?.trim() || null,
+        secondLastName: optStr(body.secondLastName),
         email: email.trim().toLowerCase(),
-        phone: phone?.trim() || null,
-        birthDate: birthDate ? new Date(birthDate) : null,
-        gender: gender || null,
-        address: address?.trim() || null,
-        commune: commune?.trim() || null,
-        city: city?.trim() || null,
-        nationality: nationality?.trim() || null,
-        dietaryRestrictions: dietaryRestrictions?.trim() || null,
-        medicalNotes: medicalNotes?.trim() || null,
-        guardianName: guardianName?.trim() || null,
-        guardianPhone: guardianPhone?.trim() || null,
-        guardianEmail: guardianEmail?.trim() || null,
-        scoutZone: scoutZone?.trim() || null,
-        scoutDistrict: scoutDistrict?.trim() || null,
-        scoutGroup: scoutGroup?.trim() || null,
+        phone: optStr(body.phone),
+        birthDate: parsedBirthDate,
+        gender: optStr(body.gender),
+        address: optStr(body.address),
+        commune: optStr(body.commune),
+        city: optStr(body.city),
+        nationality: optStr(body.nationality),
+        dietaryRestrictions: optStr(body.dietaryRestrictions),
+        medicalNotes: optStr(body.medicalNotes),
+        guardianName: optStr(body.guardianName),
+        guardianPhone: optStr(body.guardianPhone),
+        guardianEmail: optStr(body.guardianEmail),
+        scoutZone: optStr(body.scoutZone),
+        scoutDistrict: optStr(body.scoutDistrict),
+        scoutGroup: optStr(body.scoutGroup),
         contingentRole: rawRole,
-        status: status || 'CONFIRMADO',
-        unitOrPatrol: unitOrPatrol?.trim() || null,
-        cupoCode: cupoCode?.trim() || null,
-        unit: unit?.trim() || null,
-        unitName: unitName?.trim() || null,
-        patrol: patrol?.trim() || null,
-        patrolName: patrolName?.trim() || null,
-        uniformSize: uniformSize?.trim() || null,
-        targetFeeUSD: targetFeeUSD ? parseFloat(targetFeeUSD) : null,
+        status: optStr(body.status) || 'CONFIRMADO',
+        unitOrPatrol: optStr(body.unitOrPatrol),
+        cupoCode: optStr(body.cupoCode),
+        unit: optStr(body.unit),
+        unitName: optStr(body.unitName),
+        patrol: optStr(body.patrol),
+        patrolName: optStr(body.patrolName),
+        uniformSize: optStr(body.uniformSize),
+        targetFeeUSD: parseOptionalFloat(body.targetFeeUSD),
         planId: plan ? plan.id : null,
-        notes: notes?.trim() || null,
+        notes: optStr(body.notes),
       },
       include: {
         medicalRecord: {
@@ -267,21 +270,21 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    const targetAmount = resolveParticipantTargetAmount(
+      newParticipant.targetFeeUSD,
+      newParticipant.plan?.totalAmount
+    );
     const financial = calculateFinancialSummary(
       newParticipant.plan?.installments || [],
       newParticipant.payments || [],
-      newParticipant.targetFeeUSD || newParticipant.plan?.totalAmount
+      targetAmount
     );
 
     return NextResponse.json(
       { participant: { ...newParticipant, financial } },
       { status: 201 }
     );
-  } catch (error) {
-    console.error('Error creating participant:', error);
-    return NextResponse.json(
-      { error: 'Error al registrar participante' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al registrar participante', 500);
   }
 }

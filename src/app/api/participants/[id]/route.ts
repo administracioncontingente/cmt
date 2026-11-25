@@ -1,11 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
-import { calculateFinancialSummary } from '@/lib/finance';
+import { getCurrentUser, getEventPermissions } from '@/lib/auth';
+import { calculateFinancialSummary, resolveParticipantTargetAmount } from '@/lib/finance';
 import { formatRut, cleanRut } from '@/lib/rut';
+import { apiErrorResponse, parseOptionalDate, parseOptionalFloat } from '@/lib/apiUtils';
+
+const participantDetailInclude = {
+  medicalRecord: true,
+  plan: {
+    include: {
+      installments: {
+        orderBy: { installmentNumber: 'asc' as const },
+      },
+    },
+  },
+  payments: {
+    include: {
+      registeredBy: {
+        select: { id: true, name: true, email: true },
+      },
+    },
+    orderBy: { paymentDate: 'desc' as const },
+  },
+  emailMessages: {
+    orderBy: { date: 'desc' as const },
+  },
+  incidents: {
+    orderBy: { createdAt: 'desc' as const },
+    include: {
+      assignedTo: { select: { id: true, name: true } },
+      comments: true,
+    },
+  },
+};
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getCurrentUser();
@@ -18,34 +48,7 @@ export async function GET(
   try {
     const participant = await prisma.participant.findUnique({
       where: { id },
-      include: {
-        medicalRecord: true,
-        plan: {
-          include: {
-            installments: {
-              orderBy: { installmentNumber: 'asc' },
-            },
-          },
-        },
-        payments: {
-          include: {
-            registeredBy: {
-              select: { name: true, email: true },
-            },
-          },
-          orderBy: { paymentDate: 'desc' },
-        },
-        emailMessages: {
-          orderBy: { date: 'desc' },
-        },
-        incidents: {
-          orderBy: { createdAt: 'desc' },
-          include: {
-            assignedTo: { select: { id: true, name: true } },
-            comments: true,
-          },
-        },
-      },
+      include: participantDetailInclude,
     });
 
     if (!participant) {
@@ -55,9 +58,17 @@ export async function GET(
       );
     }
 
-    const totalAmount = participant.targetFeeUSD && participant.targetFeeUSD > 0
-      ? participant.targetFeeUSD
-      : (participant.plan?.totalAmount || 3600);
+    if (participant.eventId && !getEventPermissions(user, participant.eventId).canView) {
+      return NextResponse.json(
+        { error: 'No tienes acceso a este evento' },
+        { status: 403 }
+      );
+    }
+
+    const totalAmount = resolveParticipantTargetAmount(
+      participant.targetFeeUSD,
+      participant.plan?.totalAmount
+    );
 
     const financial = calculateFinancialSummary(
       participant.plan?.installments || [],
@@ -66,12 +77,8 @@ export async function GET(
     );
 
     return NextResponse.json({ participant: { ...participant, financial } });
-  } catch (error) {
-    console.error('Error fetching participant detail:', error);
-    return NextResponse.json(
-      { error: 'Error al obtener detalle del participante' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al obtener detalle del participante', 500);
   }
 }
 
@@ -87,8 +94,6 @@ export async function PUT(
   const { id } = await params;
 
   try {
-    const body = await req.json();
-
     const existing = await prisma.participant.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json(
@@ -97,10 +102,29 @@ export async function PUT(
       );
     }
 
+    if (existing.eventId) {
+      if (!getEventPermissions(user, existing.eventId).canEditParticipants) {
+        return NextResponse.json(
+          { error: 'No tienes permisos para editar participantes en este evento' },
+          { status: 403 }
+        );
+      }
+    } else if (user.role !== 'SUPER_ADMIN') {
+      return NextResponse.json(
+        { error: 'No tienes acceso a este participante' },
+        { status: 403 }
+      );
+    }
+
+    const body = (await req.json()) as Record<string, unknown>;
+
     let formattedRut = existing.rut;
     let cleanR = existing.rutClean;
-    if (body.rut) {
+    if (typeof body.rut === 'string' && body.rut.trim()) {
       cleanR = cleanRut(body.rut);
+      if (cleanR.length < 2) {
+        return NextResponse.json({ error: 'RUT inválido' }, { status: 400 });
+      }
       formattedRut = formatRut(cleanR);
       if (formattedRut !== existing.rut) {
         const checkDupl = await prisma.participant.findUnique({
@@ -115,59 +139,70 @@ export async function PUT(
       }
     }
 
+    let birthDateUpdate = existing.birthDate;
+    if (body.birthDate !== undefined) {
+      if (body.birthDate === null || body.birthDate === '') {
+        birthDateUpdate = null;
+      } else {
+        const parsed = parseOptionalDate(body.birthDate);
+        if (!parsed) {
+          return NextResponse.json({ error: 'Fecha de nacimiento inválida' }, { status: 400 });
+        }
+        birthDateUpdate = parsed;
+      }
+    }
+
+    const optUpdate = (val: unknown, fallback: string | null): string | null => {
+      if (val === undefined) return fallback;
+      if (val === null) return null;
+      if (typeof val === 'string') return val.trim() || null;
+      return fallback;
+    };
+
     const updated = await prisma.participant.update({
       where: { id },
       data: {
         rut: formattedRut,
         rutClean: cleanR,
-        firstName: body.firstName?.trim() ?? existing.firstName,
-        lastName: body.lastName?.trim() ?? existing.lastName,
-        secondLastName: body.secondLastName !== undefined ? body.secondLastName?.trim() : existing.secondLastName,
-        email: body.email?.trim().toLowerCase() ?? existing.email,
-        phone: body.phone !== undefined ? body.phone?.trim() : existing.phone,
-        birthDate: body.birthDate ? new Date(body.birthDate) : existing.birthDate,
-        gender: body.gender !== undefined ? body.gender : existing.gender,
-        address: body.address !== undefined ? body.address?.trim() : existing.address,
-        commune: body.commune !== undefined ? body.commune?.trim() : existing.commune,
-        city: body.city !== undefined ? body.city?.trim() : existing.city,
-        nationality: body.nationality !== undefined ? body.nationality?.trim() : existing.nationality,
-        dietaryRestrictions: body.dietaryRestrictions !== undefined ? body.dietaryRestrictions?.trim() : existing.dietaryRestrictions,
-        medicalNotes: body.medicalNotes !== undefined ? body.medicalNotes?.trim() : existing.medicalNotes,
-        guardianName: body.guardianName !== undefined ? body.guardianName?.trim() : existing.guardianName,
-        guardianPhone: body.guardianPhone !== undefined ? body.guardianPhone?.trim() : existing.guardianPhone,
-        guardianEmail: body.guardianEmail !== undefined ? body.guardianEmail?.trim() : existing.guardianEmail,
-        scoutZone: body.scoutZone !== undefined ? body.scoutZone?.trim() : existing.scoutZone,
-        scoutDistrict: body.scoutDistrict !== undefined ? body.scoutDistrict?.trim() : existing.scoutDistrict,
-        scoutGroup: body.scoutGroup !== undefined ? body.scoutGroup?.trim() : existing.scoutGroup,
-        contingentRole: body.contingentRole ?? existing.contingentRole,
-        status: body.status ?? existing.status,
-        unitOrPatrol: body.unitOrPatrol !== undefined ? body.unitOrPatrol?.trim() : existing.unitOrPatrol,
-        cupoCode: body.cupoCode !== undefined ? body.cupoCode?.trim() : existing.cupoCode,
-        unit: body.unit !== undefined ? body.unit?.trim() : existing.unit,
-        unitName: body.unitName !== undefined ? body.unitName?.trim() : existing.unitName,
-        patrol: body.patrol !== undefined ? body.patrol?.trim() : existing.patrol,
-        patrolName: body.patrolName !== undefined ? body.patrolName?.trim() : existing.patrolName,
-        uniformSize: body.uniformSize !== undefined ? body.uniformSize?.trim() : existing.uniformSize,
-        polandRegistered: body.polandRegistered !== undefined ? body.polandRegistered?.trim() : existing.polandRegistered,
-        targetFeeUSD: body.targetFeeUSD !== undefined ? parseFloat(body.targetFeeUSD) : existing.targetFeeUSD,
-        notes: body.notes !== undefined ? body.notes?.trim() : existing.notes,
+        firstName: typeof body.firstName === 'string' && body.firstName.trim() ? body.firstName.trim() : existing.firstName,
+        lastName: typeof body.lastName === 'string' && body.lastName.trim() ? body.lastName.trim() : existing.lastName,
+        secondLastName: optUpdate(body.secondLastName, existing.secondLastName),
+        email: typeof body.email === 'string' && body.email.trim() ? body.email.trim().toLowerCase() : existing.email,
+        phone: optUpdate(body.phone, existing.phone),
+        birthDate: birthDateUpdate,
+        gender: optUpdate(body.gender, existing.gender),
+        address: optUpdate(body.address, existing.address),
+        commune: optUpdate(body.commune, existing.commune),
+        city: optUpdate(body.city, existing.city),
+        nationality: optUpdate(body.nationality, existing.nationality),
+        dietaryRestrictions: optUpdate(body.dietaryRestrictions, existing.dietaryRestrictions),
+        medicalNotes: optUpdate(body.medicalNotes, existing.medicalNotes),
+        guardianName: optUpdate(body.guardianName, existing.guardianName),
+        guardianPhone: optUpdate(body.guardianPhone, existing.guardianPhone),
+        guardianEmail: optUpdate(body.guardianEmail, existing.guardianEmail),
+        scoutZone: optUpdate(body.scoutZone, existing.scoutZone),
+        scoutDistrict: optUpdate(body.scoutDistrict, existing.scoutDistrict),
+        scoutGroup: optUpdate(body.scoutGroup, existing.scoutGroup),
+        contingentRole: typeof body.contingentRole === 'string' && body.contingentRole.trim() ? body.contingentRole.trim() : existing.contingentRole,
+        status: typeof body.status === 'string' && body.status.trim() ? body.status.trim() : existing.status,
+        unitOrPatrol: optUpdate(body.unitOrPatrol, existing.unitOrPatrol),
+        cupoCode: optUpdate(body.cupoCode, existing.cupoCode),
+        unit: optUpdate(body.unit, existing.unit),
+        unitName: optUpdate(body.unitName, existing.unitName),
+        patrol: optUpdate(body.patrol, existing.patrol),
+        patrolName: optUpdate(body.patrolName, existing.patrolName),
+        uniformSize: optUpdate(body.uniformSize, existing.uniformSize),
+        polandRegistered: optUpdate(body.polandRegistered, existing.polandRegistered),
+        targetFeeUSD: body.targetFeeUSD !== undefined ? parseOptionalFloat(body.targetFeeUSD) : existing.targetFeeUSD,
+        notes: optUpdate(body.notes, existing.notes),
       },
-      include: {
-        medicalRecord: true,
-        plan: {
-          include: {
-            installments: { orderBy: { installmentNumber: 'asc' } },
-          },
-        },
-        payments: {
-          orderBy: { paymentDate: 'desc' },
-        },
-      },
+      include: participantDetailInclude,
     });
 
-    const totalAmount = updated.targetFeeUSD && updated.targetFeeUSD > 0
-      ? updated.targetFeeUSD
-      : (updated.plan?.totalAmount || 3600);
+    const totalAmount = resolveParticipantTargetAmount(
+      updated.targetFeeUSD,
+      updated.plan?.totalAmount
+    );
 
     const financial = calculateFinancialSummary(
       updated.plan?.installments || [],
@@ -176,17 +211,13 @@ export async function PUT(
     );
 
     return NextResponse.json({ participant: { ...updated, financial } });
-  } catch (error) {
-    console.error('Error updating participant:', error);
-    return NextResponse.json(
-      { error: 'Error al actualizar participante' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al actualizar participante', 500);
   }
 }
 
 export async function DELETE(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getCurrentUser();
@@ -197,13 +228,35 @@ export async function DELETE(
   const { id } = await params;
 
   try {
+    const existing = await prisma.participant.findUnique({
+      where: { id },
+      select: { id: true, eventId: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'Participante no encontrado' },
+        { status: 404 }
+      );
+    }
+
+    if (existing.eventId) {
+      if (!getEventPermissions(user, existing.eventId).canDeleteParticipants) {
+        return NextResponse.json(
+          { error: 'Solo los administradores del evento pueden eliminar participantes' },
+          { status: 403 }
+        );
+      }
+    } else if (user.role !== 'SUPER_ADMIN') {
+      return NextResponse.json(
+        { error: 'No tienes permisos para eliminar este participante' },
+        { status: 403 }
+      );
+    }
+
     await prisma.participant.delete({ where: { id } });
     return NextResponse.json({ success: true, message: 'Participante eliminado' });
-  } catch (error) {
-    console.error('Error deleting participant:', error);
-    return NextResponse.json(
-      { error: 'Error al eliminar participante' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al eliminar participante', 500);
   }
 }
