@@ -37,9 +37,12 @@ model Event {
   updatedAt    DateTime          @updatedAt
 
   // Relaciones
-  memberships  EventMembership[]
-  plans        PaymentPlan[]
-  participants Participant[]
+  memberships   EventMembership[]
+  plans         PaymentPlan[]
+  participants  Participant[]
+  emailAccounts EmailAccount[]
+  emailMessages EmailMessage[]
+  incidents     Incident[]
 }
 
 model EventMembership {
@@ -63,15 +66,18 @@ model EventMembership {
 // -------------------------------------------------------------
 
 model User {
-  id           String            @id @default(cuid())
-  email        String            @unique
-  passwordHash String
-  name         String
-  role         String            @default("ADMIN") // SUPER_ADMIN, ADMIN, USER
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  payments     Payment[]
-  memberships  EventMembership[]
+  id                String            @id @default(cuid())
+  email             String            @unique
+  passwordHash      String
+  name              String
+  role              String            @default("ADMIN") // SUPER_ADMIN, ADMIN, USER
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  payments          Payment[]
+  memberships       EventMembership[]
+  assignedIncidents Incident[]        @relation("AssignedIncidents")
+  createdIncidents  Incident[]        @relation("CreatedIncidents")
+  incidentComments  IncidentComment[]
 }
 
 // -------------------------------------------------------------
@@ -191,6 +197,10 @@ model Participant {
   // Ficha Médica WSJ
   medicalRecord        MedicalRecord?
 
+  // Comunicaciones e Incidencias CRM
+  emailMessages        EmailMessage[]
+  incidents            Incident[]
+
   notes                String?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
@@ -198,6 +208,7 @@ model Participant {
   @@index([eventId])
   @@index([rut])
   @@index([rutClean])
+  @@index([email])
 }
 
 // -------------------------------------------------------------
@@ -316,4 +327,119 @@ model Payment {
   registeredBy         User?        @relation(fields: [registeredById], references: [id], onDelete: SetNull)
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
+}
+
+// -------------------------------------------------------------
+// COMUNICACIONES POR CORREO (GOOGLE / INBOX)
+// -------------------------------------------------------------
+
+model EmailAccount {
+  id           String         @id @default(cuid())
+  eventId      String
+  event        Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  email        String
+  provider     String         @default("GOOGLE") // GOOGLE, IMAP, SIMULATOR
+  accessToken  String?
+  refreshToken String?
+  tokenExpiry  DateTime?
+  syncStatus   String         @default("IDLE") // IDLE, SYNCING, ERROR, SUCCESS
+  lastSyncedAt DateTime?
+  lastError    String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  messages     EmailMessage[]
+
+  @@unique([eventId, email])
+}
+
+model EmailMessage {
+  id              String        @id @default(cuid())
+  eventId         String
+  event           Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  accountId       String?
+  account         EmailAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  // Datos específicos de Google / Gmail
+  googleMessageId String?       @unique // ID del mensaje en Gmail
+  googleThreadId  String?               // ID del hilo de conversación en Gmail
+
+  senderEmail     String
+  senderName      String?
+  recipientEmail  String?
+  subject         String
+  snippet         String?
+  bodyText        String?
+  bodyHtml        String?
+  date            DateTime
+  hasAttachments  Boolean       @default(false)
+  labels          String?               // JSON o tags (INBOX, UNREAD, IMPORTANT, etc.)
+
+  // Asociación Inteligente al Participante
+  participantId   String?
+  participant     Participant?  @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  matchMethod     String?               // EXACT_EMAIL, GUARDIAN_EMAIL, RUT_MATCH, MANUAL
+
+  // Vinculación a Incidencia / Ticket
+  ticketId        String?
+  ticket          Incident?     @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([eventId])
+  @@index([googleThreadId])
+  @@index([participantId])
+  @@index([senderEmail])
+}
+
+// -------------------------------------------------------------
+// GESTIÓN DE INCIDENCIAS, CASOS Y TICKETS CRM
+// -------------------------------------------------------------
+
+model Incident {
+  id              String            @id @default(cuid())
+  ticketNumber    String            @unique // Ej: "INC-2027-001"
+  eventId         String
+  event           Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participantId   String
+  participant     Participant       @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  title           String
+  description     String
+  category        String            @default("CONSULTA_GENERAL") // FINANZAS, FICHA_MEDICA, PASAJES_LOGISTICA, CEDULA_LEGAL, CONSULTA_GENERAL
+  priority        String            @default("MEDIA")            // URGENTE, ALTA, MEDIA, BAJA
+  status          String            @default("ABIERTA")          // ABIERTA, EN_PROCESO, ESPERANDO_RESPUESTA, RESUELTA, CERRADA
+
+  assignedToId    String?
+  assignedTo      User?             @relation("AssignedIncidents", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdById     String?
+  createdBy       User?             @relation("CreatedIncidents", fields: [createdById], references: [id], onDelete: SetNull)
+
+  resolutionNotes String?
+  resolvedAt      DateTime?
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  messages        EmailMessage[]
+  comments        IncidentComment[]
+
+  @@index([eventId])
+  @@index([participantId])
+  @@index([status])
+  @@index([category])
+}
+
+model IncidentComment {
+  id         String   @id @default(cuid())
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  authorName String
+  content    String
+  isInternal Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@index([incidentId])
 }

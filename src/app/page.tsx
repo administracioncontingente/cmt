@@ -8,6 +8,7 @@ import { ParticipantTable } from '@/components/ParticipantTable';
 import { ParticipantDetailModal } from '@/components/ParticipantDetailModal';
 import { ParticipantFormModal } from '@/components/ParticipantFormModal';
 import { ImportModal } from '@/components/ImportModal';
+import { InboxAndIncidentsModal } from '@/components/InboxAndIncidentsModal';
 import { Loader2 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -18,6 +19,7 @@ export default function DashboardPage() {
 
   // Dashboard Data
   const [stats, setStats] = useState<any>(null);
+  const [activeEvent, setActiveEvent] = useState<any>(null);
   const [participants, setParticipants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,6 +34,7 @@ export default function DashboardPage() {
   const [editingParticipant, setEditingParticipant] = useState<any | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showInboxModal, setShowInboxModal] = useState(false);
 
   // Verify auth session
   useEffect(() => {
@@ -60,6 +63,7 @@ export default function DashboardPage() {
       if (res.ok) {
         const data = await res.json();
         setStats(data.summary);
+        if (data.event) setActiveEvent(data.event);
       }
     } catch (err) {
       console.error('Error fetching stats:', err);
@@ -117,7 +121,14 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#000c33] text-slate-100 flex flex-col font-sans">
-      <Navbar user={user} />
+      <Navbar
+        user={user}
+        onOpenInbox={() => setShowInboxModal(true)}
+        onEventChange={(ev) => {
+          setActiveEvent(ev);
+          handleRefreshAll();
+        }}
+      />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Metric Cards */}
@@ -197,6 +208,19 @@ export default function DashboardPage() {
         <ImportModal
           onClose={() => setShowImportModal(false)}
           onSuccess={handleRefreshAll}
+        />
+      )}
+
+      {showInboxModal && (
+        <InboxAndIncidentsModal
+          isOpen={showInboxModal}
+          onClose={() => setShowInboxModal(false)}
+          activeEvent={activeEvent}
+          currentUser={user}
+          onSelectParticipant={(pId) => {
+            setShowInboxModal(false);
+            setSelectedParticipantId(pId);
+          }}
         />
       )}
     </div>

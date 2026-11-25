@@ -3,7 +3,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { LogOut, User, Heart } from 'lucide-react';
+import { LogOut, User, Heart, Mail } from 'lucide-react';
 import { EventSelector, EventItem } from './EventSelector';
 
 interface NavbarProps {
@@ -14,9 +14,10 @@ interface NavbarProps {
     role: string;
   } | null;
   onEventChange?: (event: EventItem) => void;
+  onOpenInbox?: () => void;
 }
 
-export function Navbar({ user, onEventChange }: NavbarProps) {
+export function Navbar({ user, onEventChange, onOpenInbox }: NavbarProps) {
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -51,8 +52,19 @@ export function Navbar({ user, onEventChange }: NavbarProps) {
             <EventSelector currentUser={user} onEventChange={onEventChange} />
           </div>
 
-          {/* Right section: Medical Portal & User Account */}
+          {/* Right section: Inbox CRM, Medical Portal & User Account */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {user && onOpenInbox && (
+              <button
+                onClick={onOpenInbox}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#000c33] border border-[#FEB135]/40 hover:border-[#FEB135] text-[#FEB135] hover:text-white text-xs font-bold transition-colors shadow-sm"
+                title="Bandeja de Entrada de Correos e Incidencias CRM"
+              >
+                <Mail className="w-3.5 h-3.5 text-[#FEB135]" />
+                <span className="hidden sm:inline">Inbox & Casos</span>
+              </button>
+            )}
+
             <a
               href="/ficha-medica"
               target="_blank"

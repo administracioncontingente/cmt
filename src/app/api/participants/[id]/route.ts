@@ -35,6 +35,16 @@ export async function GET(
           },
           orderBy: { paymentDate: 'desc' },
         },
+        emailMessages: {
+          orderBy: { date: 'desc' },
+        },
+        incidents: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            assignedTo: { select: { id: true, name: true } },
+            comments: true,
+          },
+        },
       },
     });
 

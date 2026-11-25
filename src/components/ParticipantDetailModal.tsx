@@ -28,6 +28,7 @@ import {
   Syringe,
   AlertTriangle,
   FileText,
+  Ticket,
 } from 'lucide-react';
 import { formatUSD, FinancialSummary } from '@/lib/finance';
 
@@ -42,7 +43,7 @@ export function ParticipantDetailModal({
   onClose,
   onParticipantUpdated,
 }: ParticipantDetailModalProps) {
-  const [activeTab, setActiveTab] = useState<'finance' | 'profile' | 'logistics' | 'medical'>('finance');
+  const [activeTab, setActiveTab] = useState<'finance' | 'profile' | 'logistics' | 'medical' | 'communications' | 'incidents'>('finance');
   const [medLang, setMedLang] = useState<'es' | 'en' | 'pl'>('es');
   const [copiedLink, setCopiedLink] = useState(false);
   const [data, setData] = useState<any>(null);
@@ -283,6 +284,28 @@ export function ParticipantDetailModal({
             ) : (
               <span className="w-2 h-2 rounded-full bg-amber-400" title="Ficha pendiente" />
             )}
+          </button>
+          <button
+            onClick={() => setActiveTab('communications')}
+            className={`py-3 px-4 text-xs font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
+              activeTab === 'communications'
+                ? 'border-[#FEB135] text-[#FEB135]'
+                : 'border-transparent text-slate-300 hover:text-white'
+            }`}
+          >
+            <Mail className="w-4 h-4 text-sky-400" />
+            Correos & Inbox ({data.emailMessages?.length || 0})
+          </button>
+          <button
+            onClick={() => setActiveTab('incidents')}
+            className={`py-3 px-4 text-xs font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
+              activeTab === 'incidents'
+                ? 'border-[#FEB135] text-[#FEB135]'
+                : 'border-transparent text-slate-300 hover:text-white'
+            }`}
+          >
+            <Ticket className="w-4 h-4 text-purple-400" />
+            Incidencias CRM ({data.incidents?.length || 0})
           </button>
         </div>
 
@@ -727,6 +750,138 @@ export function ParticipantDetailModal({
             </div>
           )}
 
+          {/* TAB 5: COMUNICACIONES & CORREOS */}
+          {activeTab === 'communications' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-sky-400" />
+                    Historial de Correos e Hilos de Gmail Asociados
+                  </h4>
+                  <p className="text-xs text-slate-300">
+                    Mensajes vinculados automáticamente por correo, apoderado o RUT detectado
+                  </p>
+                </div>
+              </div>
+
+              {!data.emailMessages || data.emailMessages.length === 0 ? (
+                <div className="bg-[#000c33]/60 border border-[#0d349e] rounded-xl p-8 text-center space-y-2">
+                  <Mail className="w-8 h-8 text-slate-600 mx-auto" />
+                  <p className="text-xs text-slate-400">
+                    No hay correos asociados a este participante todavía.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {data.emailMessages.map((msg: any) => (
+                    <div key={msg.id} className="bg-[#000c33] border border-[#0d349e] rounded-xl p-4 space-y-2 text-left">
+                      <div className="flex items-center justify-between text-xs pb-2 border-b border-[#0d349e]/40">
+                        <div>
+                          <strong className="text-white block">{msg.senderName || msg.senderEmail}</strong>
+                          <span className="text-[11px] text-slate-400">&lt;{msg.senderEmail}&gt;</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[11px] text-slate-400 block">
+                            {new Date(msg.date).toLocaleDateString('es-CL', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#001558] text-[#FEB135] font-mono">
+                            ID: {msg.googleMessageId?.slice(0, 16)}...
+                          </span>
+                        </div>
+                      </div>
+
+                      <h5 className="text-xs font-bold text-white">{msg.subject}</h5>
+                      <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">
+                        {msg.bodyText || msg.snippet}
+                      </p>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-[#0d349e]/30 text-[10px]">
+                        <span className="text-emerald-400 font-semibold">
+                          ✓ Método de match: {msg.matchMethod || 'AUTOMATICO'}
+                        </span>
+                        {msg.googleThreadId && (
+                          <span className="text-slate-400 font-mono">
+                            Hilo Google: {msg.googleThreadId}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 6: INCIDENCIAS & TICKETS CRM */}
+          {activeTab === 'incidents' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Ticket className="w-4 h-4 text-purple-400" />
+                    Casos e Incidencias Registradas para el Participante
+                  </h4>
+                  <p className="text-xs text-slate-300">
+                    Seguimiento de problemas financieros, médicos, de visado o logística
+                  </p>
+                </div>
+              </div>
+
+              {!data.incidents || data.incidents.length === 0 ? (
+                <div className="bg-[#000c33]/60 border border-[#0d349e] rounded-xl p-8 text-center space-y-2">
+                  <Ticket className="w-8 h-8 text-slate-600 mx-auto" />
+                  <p className="text-xs text-slate-400">
+                    No hay incidencias abiertas o históricas registradas para este participante.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {data.incidents.map((inc: any) => (
+                    <div key={inc.id} className="bg-[#000c33] border border-[#0d349e] rounded-xl p-4 space-y-2 text-left">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-xs text-[#FEB135]">
+                            {inc.ticketNumber}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-[#001558] text-slate-200 font-bold">
+                            {inc.category}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                            inc.status === 'ABIERTA'
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              : inc.status === 'EN_PROCESO'
+                              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          }`}
+                        >
+                          {inc.status}
+                        </span>
+                      </div>
+
+                      <h5 className="text-xs font-bold text-white">{inc.title}</h5>
+                      <p className="text-xs text-slate-300 whitespace-pre-wrap">{inc.description}</p>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-[#0d349e]/30 text-[10px] text-slate-400">
+                        <span>Asignado a: <strong className="text-white">{inc.assignedTo?.name || 'Equipo General'}</strong></span>
+                        <span>Prioridad: <strong className="text-red-400">{inc.priority}</strong></span>
+                        <span>Creado: {new Date(inc.createdAt).toLocaleDateString('es-CL')}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'logistics' && (
             <div className="space-y-4">
               {/* Contingent and Unit Allocation */}
@@ -1007,6 +1162,138 @@ export function ParticipantDetailModal({
                     Abrir Portal Ficha Médica
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: COMUNICACIONES & CORREOS */}
+          {activeTab === 'communications' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-sky-400" />
+                    Historial de Correos e Hilos de Gmail Asociados
+                  </h4>
+                  <p className="text-xs text-slate-300">
+                    Mensajes vinculados automáticamente por correo, apoderado o RUT detectado
+                  </p>
+                </div>
+              </div>
+
+              {!data.emailMessages || data.emailMessages.length === 0 ? (
+                <div className="bg-[#000c33]/60 border border-[#0d349e] rounded-xl p-8 text-center space-y-2">
+                  <Mail className="w-8 h-8 text-slate-600 mx-auto" />
+                  <p className="text-xs text-slate-400">
+                    No hay correos asociados a este participante todavía.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {data.emailMessages.map((msg: any) => (
+                    <div key={msg.id} className="bg-[#000c33] border border-[#0d349e] rounded-xl p-4 space-y-2 text-left">
+                      <div className="flex items-center justify-between text-xs pb-2 border-b border-[#0d349e]/40">
+                        <div>
+                          <strong className="text-white block">{msg.senderName || msg.senderEmail}</strong>
+                          <span className="text-[11px] text-slate-400">&lt;{msg.senderEmail}&gt;</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[11px] text-slate-400 block">
+                            {new Date(msg.date).toLocaleDateString('es-CL', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#001558] text-[#FEB135] font-mono">
+                            ID: {msg.googleMessageId?.slice(0, 16)}...
+                          </span>
+                        </div>
+                      </div>
+
+                      <h5 className="text-xs font-bold text-white">{msg.subject}</h5>
+                      <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">
+                        {msg.bodyText || msg.snippet}
+                      </p>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-[#0d349e]/30 text-[10px]">
+                        <span className="text-emerald-400 font-semibold">
+                          ✓ Método de match: {msg.matchMethod || 'AUTOMATICO'}
+                        </span>
+                        {msg.googleThreadId && (
+                          <span className="text-slate-400 font-mono">
+                            Hilo Google: {msg.googleThreadId}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 6: INCIDENCIAS & TICKETS CRM */}
+          {activeTab === 'incidents' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Ticket className="w-4 h-4 text-purple-400" />
+                    Casos e Incidencias Registradas para el Participante
+                  </h4>
+                  <p className="text-xs text-slate-300">
+                    Seguimiento de problemas financieros, médicos, de visado o logística
+                  </p>
+                </div>
+              </div>
+
+              {!data.incidents || data.incidents.length === 0 ? (
+                <div className="bg-[#000c33]/60 border border-[#0d349e] rounded-xl p-8 text-center space-y-2">
+                  <Ticket className="w-8 h-8 text-slate-600 mx-auto" />
+                  <p className="text-xs text-slate-400">
+                    No hay incidencias abiertas o históricas registradas para este participante.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {data.incidents.map((inc: any) => (
+                    <div key={inc.id} className="bg-[#000c33] border border-[#0d349e] rounded-xl p-4 space-y-2 text-left">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-xs text-[#FEB135]">
+                            {inc.ticketNumber}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-[#001558] text-slate-200 font-bold">
+                            {inc.category}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                            inc.status === 'ABIERTA'
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              : inc.status === 'EN_PROCESO'
+                              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          }`}
+                        >
+                          {inc.status}
+                        </span>
+                      </div>
+
+                      <h5 className="text-xs font-bold text-white">{inc.title}</h5>
+                      <p className="text-xs text-slate-300 whitespace-pre-wrap">{inc.description}</p>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-[#0d349e]/30 text-[10px] text-slate-400">
+                        <span>Asignado a: <strong className="text-white">{inc.assignedTo?.name || 'Equipo General'}</strong></span>
+                        <span>Prioridad: <strong className="text-red-400">{inc.priority}</strong></span>
+                        <span>Creado: {new Date(inc.createdAt).toLocaleDateString('es-CL')}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
