@@ -1,7 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
-import { calculateFinancialSummary } from '@/lib/finance';
+import { getCurrentUser, getEventPermissions } from '@/lib/auth';
+import { computeSheetSyncFields } from '@/lib/finance';
+import { apiErrorResponse, parseOptionalDate, parseOptionalFloat } from '@/lib/apiUtils';
+
+const fullParticipantInclude = {
+  medicalRecord: true,
+  plan: {
+    include: {
+      installments: { orderBy: { installmentNumber: 'asc' as const } },
+    },
+  },
+  payments: {
+    include: {
+      registeredBy: { select: { id: true, name: true, email: true } },
+    },
+    orderBy: { paymentDate: 'desc' as const },
+  },
+  emailMessages: {
+    orderBy: { date: 'desc' as const },
+  },
+  incidents: {
+    orderBy: { createdAt: 'desc' as const },
+    include: {
+      assignedTo: { select: { id: true, name: true } },
+      comments: true,
+    },
+  },
+};
 
 export async function POST(
   req: NextRequest,
@@ -15,19 +41,20 @@ export async function POST(
   const { id: participantId } = await params;
 
   try {
-    const body = await req.json();
+    const body = (await req.json()) as Record<string, unknown>;
     const { amount, paymentDate, paymentMethod, transactionReference, notes } = body;
 
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
+    const numAmount = parseOptionalFloat(amount);
+    if (numAmount === null || numAmount <= 0) {
       return NextResponse.json(
-        { error: 'El monto del abono debe ser mayor a 0 USD' },
+        { error: 'El monto del abono debe ser mayor a 0' },
         { status: 400 }
       );
     }
 
     const participant = await prisma.participant.findUnique({
       where: { id: participantId },
+      select: { id: true, eventId: true },
     });
 
     if (!participant) {
@@ -37,53 +64,88 @@ export async function POST(
       );
     }
 
-    const payment = await prisma.payment.create({
-      data: {
-        participantId,
-        amount: numAmount,
-        paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
-        paymentMethod: paymentMethod || 'TRANSFERENCIA',
-        transactionReference: transactionReference?.trim() || null,
-        notes: notes?.trim() || null,
-        registeredById: user.id,
-      },
-    });
+    if (participant.eventId) {
+      if (!getEventPermissions(user, participant.eventId).canManageFinance) {
+        return NextResponse.json(
+          { error: 'No tienes permisos financieros en este evento' },
+          { status: 403 }
+        );
+      }
+    } else if (user.role !== 'SUPER_ADMIN') {
+      return NextResponse.json(
+        { error: 'No tienes permisos financieros para este participante' },
+        { status: 403 }
+      );
+    }
 
-    // Fetch updated participant with payments & plan
-    const updated = await prisma.participant.findUnique({
-      where: { id: participantId },
-      include: {
-        plan: {
-          include: {
-            installments: { orderBy: { installmentNumber: 'asc' } },
+    const parsedDate = parseOptionalDate(paymentDate) ?? new Date();
+    const methodStr =
+      typeof paymentMethod === 'string' && paymentMethod.trim()
+        ? paymentMethod.trim()
+        : 'TRANSFERENCIA';
+    const refStr =
+      typeof transactionReference === 'string' && transactionReference.trim()
+        ? transactionReference.trim()
+        : null;
+    const notesStr = typeof notes === 'string' && notes.trim() ? notes.trim() : null;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
+        data: {
+          participantId,
+          amount: numAmount,
+          paymentDate: parsedDate,
+          paymentMethod: methodStr,
+          transactionReference: refStr,
+          notes: notesStr,
+          registeredById: user.id,
+        },
+      });
+
+      const currentParticipant = await tx.participant.findUnique({
+        where: { id: participantId },
+        include: {
+          plan: {
+            include: {
+              installments: { orderBy: { installmentNumber: 'asc' } },
+            },
+          },
+          payments: {
+            orderBy: { paymentDate: 'desc' },
           },
         },
-        payments: {
-          include: {
-            registeredBy: { select: { name: true, email: true } },
-          },
-          orderBy: { paymentDate: 'desc' },
-        },
-      },
-    });
+      });
 
-    const financial = calculateFinancialSummary(
-      updated?.plan?.installments || [],
-      updated?.payments || [],
-      updated?.plan?.totalAmount
-    );
+      const syncFields = computeSheetSyncFields({
+        installments: currentParticipant?.plan?.installments || [],
+        payments: currentParticipant?.payments || [],
+        targetFeeUSD: currentParticipant?.targetFeeUSD,
+        planTotalAmount: currentParticipant?.plan?.totalAmount,
+        currentStatus: currentParticipant?.status || 'CONFIRMADO',
+      });
+
+      const updatedParticipant = await tx.participant.update({
+        where: { id: participantId },
+        data: {
+          totalPaidSheet: syncFields.totalPaidSheet,
+          debtFinalUSD: syncFields.debtFinalUSD,
+          debtToDateUSD: syncFields.debtToDateUSD,
+          overpaymentUSD: syncFields.overpaymentUSD,
+          financialStatusSheet: syncFields.financialStatusSheet,
+        },
+        include: fullParticipantInclude,
+      });
+
+      return { payment, updatedParticipant, financial: syncFields.financial };
+    });
 
     return NextResponse.json({
       success: true,
-      payment,
-      participant: { ...updated, financial },
+      payment: result.payment,
+      participant: { ...result.updatedParticipant, financial: result.financial },
     });
-  } catch (error) {
-    console.error('Error registering payment:', error);
-    return NextResponse.json(
-      { error: 'Error al registrar el abono' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al registrar el abono', 500);
   }
 }
 
@@ -111,6 +173,11 @@ export async function DELETE(
 
     const payment = await prisma.payment.findUnique({
       where: { id: paymentId },
+      include: {
+        participant: {
+          select: { id: true, eventId: true },
+        },
+      },
     });
 
     if (!payment || payment.participantId !== participantId) {
@@ -120,41 +187,65 @@ export async function DELETE(
       );
     }
 
-    await prisma.payment.delete({ where: { id: paymentId } });
+    if (payment.participant.eventId) {
+      if (!getEventPermissions(user, payment.participant.eventId).canManageFinance) {
+        return NextResponse.json(
+          { error: 'No tienes permisos financieros en este evento' },
+          { status: 403 }
+        );
+      }
+    } else if (user.role !== 'SUPER_ADMIN') {
+      return NextResponse.json(
+        { error: 'No tienes permisos financieros para este participante' },
+        { status: 403 }
+      );
+    }
 
-    // Fetch updated participant
-    const updated = await prisma.participant.findUnique({
-      where: { id: participantId },
-      include: {
-        plan: {
-          include: {
-            installments: { orderBy: { installmentNumber: 'asc' } },
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.payment.delete({ where: { id: paymentId } });
+
+      const currentParticipant = await tx.participant.findUnique({
+        where: { id: participantId },
+        include: {
+          plan: {
+            include: {
+              installments: { orderBy: { installmentNumber: 'asc' } },
+            },
+          },
+          payments: {
+            orderBy: { paymentDate: 'desc' },
           },
         },
-        payments: {
-          include: {
-            registeredBy: { select: { name: true, email: true } },
-          },
-          orderBy: { paymentDate: 'desc' },
+      });
+
+      const syncFields = computeSheetSyncFields({
+        installments: currentParticipant?.plan?.installments || [],
+        payments: currentParticipant?.payments || [],
+        targetFeeUSD: currentParticipant?.targetFeeUSD,
+        planTotalAmount: currentParticipant?.plan?.totalAmount,
+        currentStatus: currentParticipant?.status || 'CONFIRMADO',
+      });
+
+      const updatedParticipant = await tx.participant.update({
+        where: { id: participantId },
+        data: {
+          totalPaidSheet: syncFields.totalPaidSheet,
+          debtFinalUSD: syncFields.debtFinalUSD,
+          debtToDateUSD: syncFields.debtToDateUSD,
+          overpaymentUSD: syncFields.overpaymentUSD,
+          financialStatusSheet: syncFields.financialStatusSheet,
         },
-      },
+        include: fullParticipantInclude,
+      });
+
+      return { updatedParticipant, financial: syncFields.financial };
     });
-
-    const financial = calculateFinancialSummary(
-      updated?.plan?.installments || [],
-      updated?.payments || [],
-      updated?.plan?.totalAmount
-    );
 
     return NextResponse.json({
       success: true,
-      participant: { ...updated, financial },
+      participant: { ...result.updatedParticipant, financial: result.financial },
     });
-  } catch (error) {
-    console.error('Error deleting payment:', error);
-    return NextResponse.json(
-      { error: 'Error al eliminar el abono' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al eliminar el abono', 500);
   }
 }

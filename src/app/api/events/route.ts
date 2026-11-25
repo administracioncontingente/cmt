@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser, getActiveEventId } from '@/lib/auth';
+import { getCurrentUser, resolveAuthorizedEventId } from '@/lib/auth';
+import { apiErrorResponse, parseOptionalDate } from '@/lib/apiUtils';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -10,48 +11,34 @@ export async function GET(req: NextRequest) {
 
   try {
     const isSuperAdmin = user.role === 'SUPER_ADMIN';
-    const activeEventId = await getActiveEventId();
+    const { eventId: activeEventId } = await resolveAuthorizedEventId(user);
 
     // Si es SUPER_ADMIN ve todos los eventos, si no, solo en los que tiene membresía
-    let events = [];
-    if (isSuperAdmin) {
-      events = await prisma.event.findMany({
-        where: { isActive: true },
-        orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
-        include: {
-          _count: {
-            select: {
-              participants: true,
-              memberships: true,
-              plans: true,
-            },
-          },
-        },
-      });
-    } else {
-      const userMemberships = await prisma.eventMembership.findMany({
-        where: { userId: user.id },
-        select: { eventId: true },
-      });
-      const allowedEventIds = userMemberships.map((m) => m.eventId);
+    const allowedEventIds = isSuperAdmin
+      ? []
+      : (
+          await prisma.eventMembership.findMany({
+            where: { userId: user.id },
+            select: { eventId: true },
+          })
+        ).map((m) => m.eventId);
 
-      events = await prisma.event.findMany({
-        where: {
-          id: { in: allowedEventIds },
-          isActive: true,
-        },
-        orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
-        include: {
-          _count: {
-            select: {
-              participants: true,
-              memberships: true,
-              plans: true,
-            },
+    const events = await prisma.event.findMany({
+      where: {
+        isActive: true,
+        ...(isSuperAdmin ? {} : { id: { in: allowedEventIds } }),
+      },
+      orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
+      include: {
+        _count: {
+          select: {
+            participants: true,
+            memberships: true,
+            plans: true,
           },
         },
-      });
-    }
+      },
+    });
 
     const eventsWithRoles = events.map((ev) => {
       const membership = user.eventRoles?.find((r) => r.eventId === ev.id);
@@ -68,18 +55,17 @@ export async function GET(req: NextRequest) {
       activeEventId,
       isSuperAdmin,
     });
-  } catch (error: any) {
-    console.error('Error fetching events:', error);
-    return NextResponse.json(
-      { error: 'Error al obtener eventos: ' + error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al obtener eventos', 500);
   }
 }
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
-  if (!user || user.role !== 'SUPER_ADMIN') {
+  if (!user) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
+  if (user.role !== 'SUPER_ADMIN') {
     return NextResponse.json(
       { error: 'Solo los administradores globales (SUPER_ADMIN) pueden crear nuevos eventos.' },
       { status: 403 }
@@ -102,13 +88,29 @@ export async function POST(req: NextRequest) {
       currency,
       themeColor,
       accentColor,
-    } = body;
+    } = body as Record<string, unknown>;
 
-    if (!code || !name) {
+    if (typeof code !== 'string' || typeof name !== 'string' || !code.trim() || !name.trim()) {
       return NextResponse.json(
         { error: 'Código y nombre del evento requeridos' },
         { status: 400 }
       );
+    }
+
+    let parsedStartDate: Date | null = null;
+    if (startDate !== undefined && startDate !== null && startDate !== '') {
+      parsedStartDate = parseOptionalDate(startDate);
+      if (!parsedStartDate) {
+        return NextResponse.json({ error: 'Fecha de inicio inválida' }, { status: 400 });
+      }
+    }
+
+    let parsedEndDate: Date | null = null;
+    if (endDate !== undefined && endDate !== null && endDate !== '') {
+      parsedEndDate = parseOptionalDate(endDate);
+      if (!parsedEndDate) {
+        return NextResponse.json({ error: 'Fecha de término inválida' }, { status: 400 });
+      }
     }
 
     const cleanCode = code.trim().toUpperCase();
@@ -128,17 +130,17 @@ export async function POST(req: NextRequest) {
       data: {
         code: cleanCode,
         name: name.trim(),
-        shortName: shortName?.trim() || name.trim(),
-        type: type || 'JAMBOREE_MUNDIAL',
-        description: description?.trim() || null,
-        country: country?.trim() || null,
-        city: city?.trim() || null,
-        flagEmoji: flagEmoji?.trim() || '🏕️',
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
-        currency: currency?.toUpperCase() || 'USD',
-        themeColor: themeColor || '#001558',
-        accentColor: accentColor || '#FEB135',
+        shortName: typeof shortName === 'string' && shortName.trim() ? shortName.trim() : name.trim(),
+        type: typeof type === 'string' && type.trim() ? type.trim() : 'JAMBOREE_MUNDIAL',
+        description: typeof description === 'string' && description.trim() ? description.trim() : null,
+        country: typeof country === 'string' && country.trim() ? country.trim() : null,
+        city: typeof city === 'string' && city.trim() ? city.trim() : null,
+        flagEmoji: typeof flagEmoji === 'string' && flagEmoji.trim() ? flagEmoji.trim() : '🏕️',
+        startDate: parsedStartDate,
+        endDate: parsedEndDate,
+        currency: typeof currency === 'string' && currency.trim() ? currency.trim().toUpperCase() : 'USD',
+        themeColor: typeof themeColor === 'string' && themeColor.trim() ? themeColor.trim() : '#001558',
+        accentColor: typeof accentColor === 'string' && accentColor.trim() ? accentColor.trim() : '#FEB135',
         isActive: true,
         // Auto-asignar al creador como EVENT_ADMIN
         memberships: {
@@ -155,11 +157,7 @@ export async function POST(req: NextRequest) {
       message: 'Evento creado exitosamente',
       event: newEvent,
     });
-  } catch (error: any) {
-    console.error('Error creating event:', error);
-    return NextResponse.json(
-      { error: 'Error al crear evento: ' + error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al crear evento', 500);
   }
 }

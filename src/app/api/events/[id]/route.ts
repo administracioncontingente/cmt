@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser, getEventPermissions, ACTIVE_EVENT_COOKIE } from '@/lib/auth';
+import { apiErrorResponse, parseOptionalDate } from '@/lib/apiUtils';
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getCurrentUser();
@@ -12,6 +13,10 @@ export async function GET(
   }
 
   const { id } = await params;
+  const permissions = getEventPermissions(user, id);
+  if (!permissions.canView) {
+    return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
+  }
 
   try {
     const event = await prisma.event.findUnique({
@@ -46,17 +51,12 @@ export async function GET(
       return NextResponse.json({ error: 'Evento no encontrado' }, { status: 404 });
     }
 
-    const permissions = getEventPermissions(user, event.id);
-    if (!permissions.canView) {
-      return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
-    }
-
     return NextResponse.json({
       event,
       permissions,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al obtener el evento', 500);
   }
 }
 
@@ -80,23 +80,54 @@ export async function PUT(
   }
 
   try {
-    const body = await req.json();
+    const body = (await req.json()) as Record<string, unknown>;
+
+    let startDateUpdate: Date | null | undefined = undefined;
+    if (body.startDate !== undefined) {
+      if (body.startDate === null || body.startDate === '') {
+        startDateUpdate = null;
+      } else {
+        const parsed = parseOptionalDate(body.startDate);
+        if (!parsed) {
+          return NextResponse.json({ error: 'Fecha de inicio inválida' }, { status: 400 });
+        }
+        startDateUpdate = parsed;
+      }
+    }
+
+    let endDateUpdate: Date | null | undefined = undefined;
+    if (body.endDate !== undefined) {
+      if (body.endDate === null || body.endDate === '') {
+        endDateUpdate = null;
+      } else {
+        const parsed = parseOptionalDate(body.endDate);
+        if (!parsed) {
+          return NextResponse.json({ error: 'Fecha de término inválida' }, { status: 400 });
+        }
+        endDateUpdate = parsed;
+      }
+    }
+
+    if (body.name !== undefined && (typeof body.name !== 'string' || !body.name.trim())) {
+      return NextResponse.json({ error: 'El nombre del evento no puede estar vacío' }, { status: 400 });
+    }
+
     const updated = await prisma.event.update({
       where: { id },
       data: {
-        name: body.name,
-        shortName: body.shortName,
-        type: body.type,
-        description: body.description,
-        country: body.country,
-        city: body.city,
-        flagEmoji: body.flagEmoji,
-        startDate: body.startDate ? new Date(body.startDate) : undefined,
-        endDate: body.endDate ? new Date(body.endDate) : undefined,
-        currency: body.currency,
-        isActive: body.isActive !== undefined ? body.isActive : undefined,
-        themeColor: body.themeColor,
-        accentColor: body.accentColor,
+        name: typeof body.name === 'string' ? body.name.trim() : undefined,
+        shortName: typeof body.shortName === 'string' ? body.shortName.trim() : body.shortName === null ? null : undefined,
+        type: typeof body.type === 'string' ? body.type.trim() : undefined,
+        description: typeof body.description === 'string' ? body.description.trim() : body.description === null ? null : undefined,
+        country: typeof body.country === 'string' ? body.country.trim() : body.country === null ? null : undefined,
+        city: typeof body.city === 'string' ? body.city.trim() : body.city === null ? null : undefined,
+        flagEmoji: typeof body.flagEmoji === 'string' ? body.flagEmoji.trim() : body.flagEmoji === null ? null : undefined,
+        startDate: startDateUpdate,
+        endDate: endDateUpdate,
+        currency: typeof body.currency === 'string' && body.currency.trim() ? body.currency.trim().toUpperCase() : undefined,
+        isActive: typeof body.isActive === 'boolean' ? body.isActive : undefined,
+        themeColor: typeof body.themeColor === 'string' ? body.themeColor.trim() : body.themeColor === null ? null : undefined,
+        accentColor: typeof body.accentColor === 'string' ? body.accentColor.trim() : body.accentColor === null ? null : undefined,
       },
     });
 
@@ -104,14 +135,14 @@ export async function PUT(
       message: 'Evento actualizado exitosamente',
       event: updated,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al actualizar el evento', 500);
   }
 }
 
 // POST /api/events/[id]/select -> Establece este evento como activo en las cookies
 export async function POST(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getCurrentUser();
@@ -120,6 +151,10 @@ export async function POST(
   }
 
   const { id } = await params;
+  const permissions = getEventPermissions(user, id);
+  if (!permissions.canView) {
+    return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
+  }
 
   try {
     const event = await prisma.event.findUnique({
@@ -129,11 +164,6 @@ export async function POST(
 
     if (!event) {
       return NextResponse.json({ error: 'Evento no encontrado' }, { status: 404 });
-    }
-
-    const permissions = getEventPermissions(user, event.id);
-    if (!permissions.canView) {
-      return NextResponse.json({ error: 'No tienes permiso para acceder a este evento' }, { status: 403 });
     }
 
     const response = NextResponse.json({
@@ -150,7 +180,7 @@ export async function POST(
     });
 
     return response;
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al seleccionar el evento', 500);
   }
 }

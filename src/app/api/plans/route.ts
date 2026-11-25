@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser, getActiveEventId } from '@/lib/auth';
+import { getCurrentUser, resolveAuthorizedEventId, getEventPermissions } from '@/lib/auth';
+import { apiErrorResponse } from '@/lib/apiUtils';
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -11,12 +13,22 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const paramEventId = searchParams.get('eventId');
-    const activeEventId = paramEventId || (await getActiveEventId());
+    const { eventId: activeEventId, forbidden } = await resolveAuthorizedEventId(user, paramEventId);
 
-    const where: any = {};
-    if (activeEventId) {
-      where.eventId = activeEventId;
+    if (forbidden) {
+      return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
     }
+
+    if (!activeEventId) {
+      return NextResponse.json({ plans: [] });
+    }
+
+    const permissions = getEventPermissions(user, activeEventId);
+    if (!permissions.canView) {
+      return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
+    }
+
+    const where: Prisma.PaymentPlanWhereInput = { eventId: activeEventId };
 
     const plans = await prisma.paymentPlan.findMany({
       where,
@@ -32,11 +44,7 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ plans });
-  } catch (error) {
-    console.error('Error fetching plans:', error);
-    return NextResponse.json(
-      { error: 'Error al obtener los planes de pago' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al obtener los planes de pago', 500);
   }
 }

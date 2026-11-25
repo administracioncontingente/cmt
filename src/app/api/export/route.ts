@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser, getActiveEventId } from '@/lib/auth';
-import { calculateFinancialSummary } from '@/lib/finance';
+import { getCurrentUser, resolveAuthorizedEventId, getEventPermissions } from '@/lib/auth';
+import {
+  calculateFinancialSummary,
+  resolveParticipantTargetAmount,
+  matchesHealthFilter,
+} from '@/lib/finance';
+import { buildRoleWhereClause } from '@/lib/roles';
+import { cleanRut } from '@/lib/rut';
+import { apiErrorResponse } from '@/lib/apiUtils';
 import * as XLSX from 'xlsx';
 
 export async function GET(req: NextRequest) {
@@ -13,38 +21,67 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const paramEventId = searchParams.get('eventId');
-    const activeEventId = paramEventId || (await getActiveEventId());
-    const search = searchParams.get('search')?.trim().toLowerCase() || '';
+    const { eventId: activeEventId, forbidden } = await resolveAuthorizedEventId(user, paramEventId);
+
+    if (forbidden) {
+      return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
+    }
+
+    if (!activeEventId) {
+      return NextResponse.json(
+        { error: 'No hay un evento activo seleccionado para exportar' },
+        { status: 400 }
+      );
+    }
+
+    const permissions = getEventPermissions(user, activeEventId);
+    if (!permissions.canView) {
+      return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id: activeEventId },
+      select: { id: true, code: true, currency: true },
+    });
+
+    const currency = event?.currency || 'USD';
+    const eventCode = (event?.code || 'EVENTO').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    const search = searchParams.get('search')?.trim() || '';
     const role = searchParams.get('role')?.trim() || '';
     const status = searchParams.get('status')?.trim() || '';
     const health = searchParams.get('health')?.trim() || '';
 
-    const where: any = {};
-    if (activeEventId) {
-      where.eventId = activeEventId;
-    }
+    const where: Prisma.ParticipantWhereInput = { eventId: activeEventId };
+
     if (role && role !== 'ALL') {
-      if (role === 'JOVEN') where.contingentRole = { in: ['Participante', 'Responsable de Patrulla', 'JOVEN'] };
-      else if (role === 'DIRIGENTE') where.contingentRole = { in: ['RESPONSABLE', 'DIRIGENTE', 'Educador'] };
-      else if (role === 'IST') where.contingentRole = 'IST';
-      else if (role === 'CMT') where.contingentRole = 'CMT';
-      else where.contingentRole = role;
+      const roleFilter = buildRoleWhereClause(role);
+      if (roleFilter.contingentRole !== undefined) {
+        where.contingentRole = roleFilter.contingentRole;
+      }
     }
 
-    if (status && status !== 'ALL') where.status = status;
+    if (status && status !== 'ALL') {
+      where.status = status;
+    }
 
     if (search) {
+      const cleanS = cleanRut(search);
       where.OR = [
-        { firstName: { contains: search } },
-        { lastName: { contains: search } },
-        { secondLastName: { contains: search } },
-        { rut: { contains: search } },
-        { scoutGroup: { contains: search } },
-        { scoutZone: { contains: search } },
-        { cupoCode: { contains: search } },
-        { unitName: { contains: search } },
-        { patrolName: { contains: search } },
-        { email: { contains: search } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { secondLastName: { contains: search, mode: 'insensitive' } },
+        { rut: { contains: search, mode: 'insensitive' } },
+        { rutClean: { contains: cleanS || search, mode: 'insensitive' } },
+        { scoutGroup: { contains: search, mode: 'insensitive' } },
+        { scoutZone: { contains: search, mode: 'insensitive' } },
+        { scoutDistrict: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { cupoCode: { contains: search, mode: 'insensitive' } },
+        { unitName: { contains: search, mode: 'insensitive' } },
+        { patrolName: { contains: search, mode: 'insensitive' } },
+        { city: { contains: search, mode: 'insensitive' } },
+        { commune: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -62,10 +99,7 @@ export async function GET(req: NextRequest) {
     });
 
     const enriched = participants.map((p) => {
-      const totalAmount = p.targetFeeUSD && p.targetFeeUSD > 0
-        ? p.targetFeeUSD
-        : (p.plan?.totalAmount || 3600);
-
+      const totalAmount = resolveParticipantTargetAmount(p.targetFeeUSD, p.plan?.totalAmount);
       const fin = calculateFinancialSummary(
         p.plan?.installments || [],
         p.payments || [],
@@ -75,13 +109,7 @@ export async function GET(req: NextRequest) {
     });
 
     const filtered = health && health !== 'ALL'
-      ? enriched.filter((p) => {
-          if (health === 'AL_DIA') return p.financialStatusSheet === 'Al Día' || p.financial.health === 'AL_DIA';
-          if (health === 'EN_MORA') return p.financialStatusSheet === 'Adeuda' || p.financial.health === 'EN_MORA';
-          if (health === 'PAGADO_TOTAL') return p.financialStatusSheet === 'Total Pagado' || p.financial.health === 'PAGADO_TOTAL';
-          if (health === 'BAJA') return p.financialStatusSheet === 'BAJA' || p.status === 'RETIRADO';
-          return true;
-        })
+      ? enriched.filter((p) => matchesHealthFilter(p, health))
       : enriched;
 
     const dataRows = filtered.map((p) => {
@@ -106,10 +134,10 @@ export async function GET(req: NextRequest) {
         'Patrulla': p.patrolName || p.patrol || '',
         'Talla Indumentaria': p.uniformSize || '',
         'Registro Polonia': p.polandRegistered || '',
-        'Cuota Final (USD)': p.totalAmount,
-        'Abonado Real (USD)': p.financial.totalPaid,
-        'Saldo Restante (USD)': remaining,
-        'Deuda a Fecha (USD)': p.debtToDateUSD || p.financial.overdueAmount,
+        [`Cuota Final (${currency})`]: p.totalAmount,
+        [`Abonado Real (${currency})`]: p.financial.totalPaid,
+        [`Saldo Restante (${currency})`]: remaining,
+        [`Deuda a Fecha (${currency})`]: p.debtToDateUSD ?? p.financial.overdueAmount,
         'Situación Financiera': p.financialStatusSheet || (p.financial.isFullyPaid ? 'Total Pagado' : 'Al Día'),
         'Nombre Apoderado': p.guardianName || '',
         'Teléfono Apoderado': p.guardianPhone || '',
@@ -123,7 +151,8 @@ export async function GET(req: NextRequest) {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Nómina Contingente AGSCH');
 
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-    const filename = `Contingente_AGSCH_Polonia2027_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const date = new Date().toISOString().split('T')[0];
+    const filename = `Contingente_AGSCH_${eventCode}_${date}.xlsx`;
 
     return new NextResponse(buffer, {
       status: 200,
@@ -132,11 +161,7 @@ export async function GET(req: NextRequest) {
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
-  } catch (error) {
-    console.error('Error in /api/export:', error);
-    return NextResponse.json(
-      { error: 'Error al exportar los datos' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error al exportar los datos', 500);
   }
 }

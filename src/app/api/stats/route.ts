@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser, getActiveEventId, getEventPermissions } from '@/lib/auth';
+import { getCurrentUser, resolveAuthorizedEventId, getEventPermissions } from '@/lib/auth';
+import { apiErrorResponse } from '@/lib/apiUtils';
+import { normalizeRoleKey } from '@/lib/roles';
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -11,31 +14,79 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const paramEventId = searchParams.get('eventId');
-    const activeEventId = paramEventId || (await getActiveEventId());
+    const { eventId: activeEventId, forbidden } = await resolveAuthorizedEventId(user, paramEventId);
 
-    const where: any = {};
-    if (activeEventId) {
-      where.eventId = activeEventId;
+    if (forbidden) {
+      return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
     }
 
+    if (!activeEventId) {
+      const emptyRoleCounts: Record<string, number> = { JOVEN: 0, DIRIGENTE: 0, IST: 0, CMT: 0 };
+      const emptyStatusCounts: Record<string, number> = {
+        CONFIRMADO: 0,
+        PRE_INSCRITO: 0,
+        LISTA_ESPERA: 0,
+        RETIRADO: 0,
+      };
+      return NextResponse.json({
+        summary: {
+          totalParticipants: 0,
+          totalProjectedUSD: 0,
+          totalCollectedUSD: 0,
+          totalOutstandingUSD: 0,
+          totalOverdueUSD: 0,
+          countAlDia: 0,
+          countEnMora: 0,
+          countCompletado: 0,
+          countBaja: 0,
+          roleCounts: emptyRoleCounts,
+          statusCounts: emptyStatusCounts,
+        },
+        event: null,
+        permissions: null,
+        totalParticipants: 0,
+        totalProjectedUSD: 0,
+        totalCollectedUSD: 0,
+        totalOutstandingUSD: 0,
+        totalOverdueUSD: 0,
+        collectionPercentage: 0,
+        currency: 'USD',
+        financialSummary: { completado: 0, alDia: 0, enMora: 0, baja: 0 },
+        roleBreakdown: emptyRoleCounts,
+        statusBreakdown: emptyStatusCounts,
+        medicalSummary: {
+          completadas: 0,
+          pendientes: 0,
+          alergiasSeveras: 0,
+          portaEpiPen: 0,
+          cadenaFrio: 0,
+        },
+      });
+    }
+
+    const userPermissions = getEventPermissions(user, activeEventId);
+    if (!userPermissions.canView) {
+      return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
+    }
+
+    const where: Prisma.ParticipantWhereInput = { eventId: activeEventId };
+
     // Obtener información del evento activo
-    const eventInfo = activeEventId
-      ? await prisma.event.findUnique({
-          where: { id: activeEventId },
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            shortName: true,
-            country: true,
-            city: true,
-            flagEmoji: true,
-            currency: true,
-            themeColor: true,
-            accentColor: true,
-          },
-        })
-      : null;
+    const eventInfo = await prisma.event.findUnique({
+      where: { id: activeEventId },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        shortName: true,
+        country: true,
+        city: true,
+        flagEmoji: true,
+        currency: true,
+        themeColor: true,
+        accentColor: true,
+      },
+    });
 
     const participants = await prisma.participant.findMany({
       where,
@@ -98,16 +149,8 @@ export async function GET(req: NextRequest) {
 
     participants.forEach((p) => {
       // Role categorizing
-      const r = (p.contingentRole || '').toUpperCase();
-      if (r.includes('RESPONSABLE') || r.includes('DIRIGENTE')) {
-        roleCounts.DIRIGENTE++;
-      } else if (r.includes('IST') || r.includes('SERVICIO')) {
-        roleCounts.IST++;
-      } else if (r.includes('CMT')) {
-        roleCounts.CMT++;
-      } else {
-        roleCounts.JOVEN++;
-      }
+      const roleKey = normalizeRoleKey(p.contingentRole);
+      roleCounts[roleKey] = (roleCounts[roleKey] || 0) + 1;
 
       // Status categorizing
       if (p.status in statusCounts) {
@@ -161,8 +204,6 @@ export async function GET(req: NextRequest) {
       ? Math.round((totalCollectedUSD / totalProjectedUSD) * 100)
       : 0;
 
-    const userPermissions = activeEventId ? getEventPermissions(user, activeEventId) : null;
-
     return NextResponse.json({
       summary: {
         totalParticipants: participants.length,
@@ -202,11 +243,7 @@ export async function GET(req: NextRequest) {
         cadenaFrio: countCadenaFrio,
       },
     });
-  } catch (error: any) {
-    console.error('Error calculating stats:', error);
-    return NextResponse.json(
-      { error: 'Error interno al calcular estadísticas: ' + error.message },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return apiErrorResponse(error, 'Error interno al calcular estadísticas', 500);
   }
 }
