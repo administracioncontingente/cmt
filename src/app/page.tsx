@@ -10,17 +10,25 @@ import { ParticipantFormModal } from '@/components/ParticipantFormModal';
 import { ImportModal } from '@/components/ImportModal';
 import { InboxAndIncidentsModal } from '@/components/InboxAndIncidentsModal';
 import { Loader2 } from 'lucide-react';
+import type {
+  DashboardStatsDTO,
+  EventPermissions,
+  EventSummary,
+  ParticipantDTO,
+  UserSessionDTO,
+} from '@/types/domain';
 
 export default function DashboardPage() {
   const router = useRouter();
 
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<UserSessionDTO | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
 
   // Dashboard Data
-  const [stats, setStats] = useState<any>(null);
-  const [activeEvent, setActiveEvent] = useState<any>(null);
-  const [participants, setParticipants] = useState<any[]>([]);
+  const [stats, setStats] = useState<DashboardStatsDTO['summary'] | null>(null);
+  const [activeEvent, setActiveEvent] = useState<EventSummary | null>(null);
+  const [permissions, setPermissions] = useState<EventPermissions | null>(null);
+  const [participants, setParticipants] = useState<ParticipantDTO[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -30,14 +38,19 @@ export default function DashboardPage() {
   const [healthFilter, setHealthFilter] = useState('ALL');
 
   // Modals state
-  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
-  const [editingParticipant, setEditingParticipant] = useState<any | null>(null);
+  const [selectedParticipantId, setSelectedParticipantId] = useState<
+    string | null
+  >(null);
+  const [editingParticipant, setEditingParticipant] =
+    useState<ParticipantDTO | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showInboxModal, setShowInboxModal] = useState(false);
 
   // Verify auth session
   useEffect(() => {
+    let cancelled = false;
+
     async function checkAuth() {
       try {
         const res = await fetch('/api/auth/me');
@@ -46,31 +59,40 @@ export default function DashboardPage() {
           return;
         }
         const data = await res.json();
-        setUser(data.user);
-      } catch (err) {
+        if (!cancelled) {
+          setUser(data.user ?? null);
+        }
+      } catch {
         router.push('/login');
       } finally {
-        setAuthChecking(false);
+        if (!cancelled) {
+          setAuthChecking(false);
+        }
       }
     }
+
     checkAuth();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
-  // Fetch stats
+  // Fetch stats (for manual refreshes / event switch)
   const fetchStats = useCallback(async () => {
     try {
       const res = await fetch('/api/stats');
       if (res.ok) {
-        const data = await res.json();
+        const data: DashboardStatsDTO = await res.json();
         setStats(data.summary);
         if (data.event) setActiveEvent(data.event);
+        setPermissions(data.permissions ?? null);
       }
     } catch (err) {
       console.error('Error fetching stats:', err);
     }
   }, []);
 
-  // Fetch participants with current filters
+  // Fetch participants with current filters (for manual refreshes / event switch)
   const fetchParticipants = useCallback(async () => {
     try {
       setLoading(true);
@@ -83,7 +105,7 @@ export default function DashboardPage() {
       const res = await fetch(`/api/participants?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setParticipants(data.participants);
+        setParticipants(data.participants || []);
       }
     } catch (err) {
       console.error('Error fetching participants:', err);
@@ -92,35 +114,82 @@ export default function DashboardPage() {
     }
   }, [searchTerm, roleFilter, statusFilter, healthFilter]);
 
-  // Load data on initial mount and when filters change (with debounce on search)
+  // Load stats on mount once authenticated
   useEffect(() => {
     if (authChecking || !user) return;
-    fetchStats();
-  }, [authChecking, user, fetchStats]);
+    let cancelled = false;
 
+    async function loadInitialStats() {
+      try {
+        const res = await fetch('/api/stats');
+        if (!cancelled && res.ok) {
+          const data: DashboardStatsDTO = await res.json();
+          setStats(data.summary);
+          if (data.event) setActiveEvent(data.event);
+          setPermissions(data.permissions ?? null);
+        }
+      } catch (err) {
+        console.error('Error fetching stats:', err);
+      }
+    }
+
+    loadInitialStats();
+    return () => {
+      cancelled = true;
+    };
+  }, [authChecking, user]);
+
+  // Load participants on mount and when filters change (debounced)
   useEffect(() => {
     if (authChecking || !user) return;
-    const timeoutId = setTimeout(() => {
-      fetchParticipants();
+    let cancelled = false;
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        setLoading(true);
+        const params = new URLSearchParams();
+        if (searchTerm) params.append('search', searchTerm);
+        if (roleFilter !== 'ALL') params.append('role', roleFilter);
+        if (statusFilter !== 'ALL') params.append('status', statusFilter);
+        if (healthFilter !== 'ALL') params.append('health', healthFilter);
+
+        const res = await fetch(`/api/participants?${params.toString()}`);
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          setParticipants(data.participants || []);
+        }
+      } catch (err) {
+        console.error('Error fetching participants:', err);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
     }, 200);
-    return () => clearTimeout(timeoutId);
-  }, [authChecking, user, fetchParticipants]);
 
-  const handleRefreshAll = () => {
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [authChecking, user, searchTerm, roleFilter, statusFilter, healthFilter]);
+
+  const handleRefreshAll = useCallback(() => {
     fetchStats();
     fetchParticipants();
-  };
+  }, [fetchStats, fetchParticipants]);
 
   if (authChecking) {
     return (
-      <div className="min-h-screen bg-[#000c33] flex items-center justify-center text-slate-300">
-        <Loader2 className="w-8 h-8 animate-spin text-[#FEB135]" />
+      <div className="min-h-screen bg-[#F5F6F8] flex items-center justify-center text-slate-600">
+        <Loader2 className="w-8 h-8 animate-spin text-[#001558]" />
       </div>
     );
   }
 
+  const currency = activeEvent?.currency || 'USD';
+
   return (
-    <div className="min-h-screen bg-[#000c33] text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F5F6F8] text-slate-800 flex flex-col font-sans">
       <Navbar
         user={user}
         onOpenInbox={() => setShowInboxModal(true)}
@@ -132,12 +201,14 @@ export default function DashboardPage() {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Metric Cards */}
-        <StatsOverview stats={stats} />
+        <StatsOverview stats={stats} currency={currency} />
 
         {/* Main Participants Management Table */}
         <ParticipantTable
           participants={participants}
           loading={loading}
+          currency={currency}
+          permissions={permissions}
           onRefresh={handleRefreshAll}
           onSelectParticipant={(id) => setSelectedParticipantId(id)}
           onEditParticipant={(p) => setEditingParticipant(p)}
@@ -155,18 +226,20 @@ export default function DashboardPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[#0d349e] bg-[#001558] py-4 text-center text-xs text-slate-300">
+      <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>
-            Asociación de Guías y Scouts de Chile • Contingente Nacional al 26° World Scout Jamboree Polonia 2027
+            Asociación de Guías y Scouts de Chile •{' '}
+            {activeEvent?.name ||
+              'Contingente Nacional al 26° World Scout Jamboree Polonia 2027'}
           </span>
-          <span className="text-[11px] text-slate-400">
+          <span className="text-[11px] text-slate-500">
             Diseño e Identidad Visual conforme a{' '}
             <a
               href="https://kitdigital.agsch.org"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#FEB135] hover:underline font-bold"
+              className="text-[#001558] hover:underline font-bold"
             >
               Kit Digital AGSCH
             </a>
@@ -178,6 +251,8 @@ export default function DashboardPage() {
       {selectedParticipantId && (
         <ParticipantDetailModal
           participantId={selectedParticipantId}
+          currency={currency}
+          permissions={permissions}
           onClose={() => setSelectedParticipantId(null)}
           onParticipantUpdated={handleRefreshAll}
         />
@@ -185,6 +260,7 @@ export default function DashboardPage() {
 
       {showCreateModal && (
         <ParticipantFormModal
+          activeEvent={activeEvent}
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
@@ -196,6 +272,7 @@ export default function DashboardPage() {
       {editingParticipant && (
         <ParticipantFormModal
           initialData={editingParticipant}
+          activeEvent={activeEvent}
           onClose={() => setEditingParticipant(null)}
           onSuccess={() => {
             setEditingParticipant(null);
@@ -206,6 +283,7 @@ export default function DashboardPage() {
 
       {showImportModal && (
         <ImportModal
+          activeEvent={activeEvent}
           onClose={() => setShowImportModal(false)}
           onSuccess={handleRefreshAll}
         />
@@ -217,6 +295,7 @@ export default function DashboardPage() {
           onClose={() => setShowInboxModal(false)}
           activeEvent={activeEvent}
           currentUser={user}
+          permissions={permissions}
           onSelectParticipant={(pId) => {
             setShowInboxModal(false);
             setSelectedParticipantId(pId);
