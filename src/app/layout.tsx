@@ -1,5 +1,13 @@
 import type { Metadata, Viewport } from 'next';
+import { Nunito_Sans } from 'next/font/google';
 import './globals.css';
+
+const nunitoSans = Nunito_Sans({
+  subsets: ['latin', 'latin-ext'],
+  weight: ['200', '300', '400', '600', '700', '800', '900'],
+  variable: '--font-nunito-sans',
+  display: 'swap',
+});
 
 export const viewport: Viewport = {
   themeColor: '#001558',
@@ -20,20 +28,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className="h-full antialiased dark">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,300..900;1,6..12,300..900&family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body className="min-h-full flex flex-col bg-[#000c33] text-slate-100 font-sans selection:bg-[#FEB135] selection:text-[#001558]">
+    <html lang="es" className={`${nunitoSans.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col bg-[#F5F6F8] text-slate-800 font-sans selection:bg-[#FEB135] selection:text-[#001558]">
         {children}
       </body>
     </html>

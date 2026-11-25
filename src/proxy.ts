@@ -1,27 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
-
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'agsch-jamboree-poland-2027-super-secret-key-32chars!'
-);
+import { getJwtSecret } from '@/lib/jwtConfig';
 
 const SESSION_COOKIE_NAME = 'agsch_session';
 
-export async function middleware(req: NextRequest) {
+const PUBLIC_PATH_PREFIXES = [
+  '/login',
+  '/api/auth/login',
+  '/ficha-medica',
+  '/medico',
+  '/api/medical',
+  '/_next',
+  '/favicon.ico',
+  '/public',
+  '/calendarios',
+];
+
+/**
+ * Next.js 16 request proxy guarding authenticated dashboard and API routes.
+ */
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Rutas públicas que no requieren autenticación
-  if (
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/api/auth/login') ||
-    pathname.startsWith('/ficha-medica') ||
-    pathname.startsWith('/medico') ||
-    pathname.startsWith('/api/medical') ||
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/favicon.ico') ||
-    pathname.startsWith('/public') ||
-    pathname.startsWith('/calendarios')
-  ) {
+  if (PUBLIC_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return NextResponse.next();
   }
 
@@ -36,7 +37,7 @@ export async function middleware(req: NextRequest) {
   }
 
   try {
-    await jwtVerify(token, JWT_SECRET);
+    await jwtVerify(token, getJwtSecret());
     return NextResponse.next();
   } catch {
     if (pathname.startsWith('/api/')) {
@@ -50,5 +51,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)'],
 };

@@ -245,6 +245,51 @@ export const CLINICAL_DICTIONARY: MedicalDictionaryEntry[] = [
   { es: 'requiere supervisión', en: 'Requires adult supervision for medication', pl: 'Wymaga nadzoru osoby dorosłej przy przyjmowaniu leków' },
 ];
 
+// Pre-ordenar una sola vez por longitud descendente para evitar colisiones de subcadenas
+const SORTED_CLINICAL_DICTIONARY = [...CLINICAL_DICTIONARY].sort(
+  (a, b) => b.es.length - a.es.length
+);
+
+const CLINICAL_DICTIONARY_MAP = new Map<string, MedicalDictionaryEntry>(
+  SORTED_CLINICAL_DICTIONARY.map((item) => [item.es.toLowerCase(), item])
+);
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const CLINICAL_DICTIONARY_REGEX = new RegExp(
+  `(?<![\\p{L}\\p{N}])(${SORTED_CLINICAL_DICTIONARY.map((item) => escapeRegExp(item.es)).join('|')})(?![\\p{L}\\p{N}])`,
+  'giu'
+);
+
+/**
+ * Traduce un segmento individual reemplazando términos clínicos con límites Unicode
+ * mediante placeholders para evitar doble reemplazo, y luego aplica heurísticas de dosis/frecuencias.
+ */
+function translateSingleSegment(segment: string): { en: string; pl: string } {
+  const matches: MedicalDictionaryEntry[] = [];
+  const tokenized = segment.replace(CLINICAL_DICTIONARY_REGEX, (matched) => {
+    const entry = CLINICAL_DICTIONARY_MAP.get(matched.toLowerCase());
+    if (!entry) return matched;
+    const tokenIndex = matches.length;
+    matches.push(entry);
+    return `\uE000${tokenIndex}\uE001`;
+  });
+
+  const heuristic = translateSegmentHeuristic(tokenized);
+
+  const restorePlaceholders = (text: string, lang: 'en' | 'pl'): string =>
+    cleanTranslatedText(
+      text.replace(/\uE000(\d+)\uE001/g, (_, idx) => matches[Number(idx)]?.[lang] ?? '')
+    );
+
+  return {
+    en: restorePlaceholders(heuristic.en, 'en'),
+    pl: restorePlaceholders(heuristic.pl, 'pl'),
+  };
+}
+
 /**
  * Traduce un texto médico del español a inglés y polaco.
  * Combina coincidencia exacta de diccionario clínico, sustitución de sintagmas médicos
@@ -282,9 +327,7 @@ export function translateMedicalText(text: string | null | undefined): { es: str
   }
 
   // 2. Coincidencia directa completa en diccionario
-  const directMatch = CLINICAL_DICTIONARY.find(
-    (item) => item.es.toLowerCase() === lower
-  );
+  const directMatch = CLINICAL_DICTIONARY_MAP.get(lower);
   if (directMatch) {
     return {
       es: raw,
@@ -293,7 +336,7 @@ export function translateMedicalText(text: string | null | undefined): { es: str
     };
   }
 
-  // 3. Procesamiento por frases o lista separada por comas, puntos y comas o saltos de línea
+  // 3. Procesamiento unificado por segmentos (lista o texto libre)
   const segments = raw
     .split(/[,;\n]+/)
     .map((s) => s.trim())
@@ -304,19 +347,14 @@ export function translateMedicalText(text: string | null | undefined): { es: str
     const translatedPL: string[] = [];
 
     for (const segment of segments) {
-      const segLower = segment.toLowerCase();
-      const match = CLINICAL_DICTIONARY.find(
-        (item) => segLower.includes(item.es.toLowerCase()) || item.es.toLowerCase().includes(segLower)
-      );
-
-      if (match) {
-        translatedEN.push(match.en);
-        translatedPL.push(match.pl);
+      const segDirect = CLINICAL_DICTIONARY_MAP.get(segment.toLowerCase());
+      if (segDirect) {
+        translatedEN.push(segDirect.en);
+        translatedPL.push(segDirect.pl);
       } else {
-        // Traducción heurística de fragmentos no hallados directamente
-        const heuristic = translateSegmentHeuristic(segment);
-        translatedEN.push(heuristic.en);
-        translatedPL.push(heuristic.pl);
+        const translated = translateSingleSegment(segment);
+        translatedEN.push(translated.en);
+        translatedPL.push(translated.pl);
       }
     }
 
@@ -327,42 +365,12 @@ export function translateMedicalText(text: string | null | undefined): { es: str
     };
   }
 
-  // 4. Búsqueda de términos clínicos dentro del texto largo
-  let enResult = raw;
-  let plResult = raw;
-  let matchedAny = false;
-
-  // Ordenar por longitud descendente para evitar colisiones de subcadenas
-  const sortedDict = [...CLINICAL_DICTIONARY].sort((a, b) => b.es.length - a.es.length);
-
-  for (const item of sortedDict) {
-    const regex = new RegExp(`\\b${escapeRegExp(item.es)}\\b`, 'gi');
-    if (regex.test(raw)) {
-      matchedAny = true;
-      enResult = enResult.replace(regex, item.en);
-      plResult = plResult.replace(regex, item.pl);
-    }
-  }
-
-  if (matchedAny) {
-    return {
-      es: raw,
-      en: cleanTranslatedText(enResult),
-      pl: cleanTranslatedText(plResult),
-    };
-  }
-
-  // Heurística de respaldo para texto clínico libre
-  const fallback = translateSegmentHeuristic(raw);
+  const single = translateSingleSegment(raw);
   return {
     es: raw,
-    en: fallback.en,
-    pl: fallback.pl,
+    en: single.en,
+    pl: single.pl,
   };
-}
-
-function escapeRegExp(string: string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function cleanTranslatedText(text: string): string {
@@ -384,8 +392,8 @@ function translateSegmentHeuristic(segment: string): { en: string; pl: string } 
     [/(\d+)\s*(mcg|microgramos)/gi, '$1 mcg', '$1 mcg'],
     [/(\d+)\s*(ml|mililitros)/gi, '$1 mL', '$1 ml'],
     [/(\d+)\s*(gotas)/gi, '$1 drops', '$1 kropli'],
-    [/(\d+)\s*(comprimido|comprimidos|pastilla|pastillas|tableta|tabletas)/gi, '$1 tablet(s)', '$1 tabl.'],
-    [/(\d+)\s*(puff|puffs|disparos)/gi, '$1 puff(s)', '$1 dawek (inhalacji)'],
+    [/(\d+)\s*(comprimidos|comprimido|pastillas|pastilla|tabletas|tableta)/gi, '$1 tablet(s)', '$1 tabl.'],
+    [/(\d+)\s*(puffs|puff|disparos)/gi, '$1 puff(s)', '$1 dawek (inhalacji)'],
     [/cada\s*(\d+)\s*horas?/gi, 'every $1 hours', 'co $1 godz.'],
     [/cada\s*(\d+)\s*d[ií]as?/gi, 'every $1 days', 'co $1 dni'],
     [/una vez al d[ií]a/gi, 'once daily (q.d.)', 'raz dziennie'],

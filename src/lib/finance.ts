@@ -41,6 +41,16 @@ export interface FinancialSummary {
 }
 
 /**
+ * Resolves the effective target fee amount for a participant.
+ */
+export function resolveParticipantTargetAmount(
+  targetFeeUSD?: number | null,
+  planTotalAmount?: number | null
+): number {
+  return targetFeeUSD && targetFeeUSD > 0 ? targetFeeUSD : (planTotalAmount || 3600);
+}
+
+/**
  * Calcula la salud financiera y la imputación de cuotas de un participante.
  */
 export function calculateFinancialSummary(
@@ -128,13 +138,106 @@ export function calculateFinancialSummary(
 }
 
 /**
+ * Checks whether an enriched participant matches a financial health filter.
+ */
+export function matchesHealthFilter(
+  participant: {
+    status: string;
+    financialStatusSheet?: string | null;
+    financial: FinancialSummary;
+  },
+  health: string
+): boolean {
+  if (!health || health === 'ALL') return true;
+  if (health === 'AL_DIA') {
+    return (
+      participant.financialStatusSheet === 'Al Día' ||
+      participant.financial.health === 'AL_DIA'
+    );
+  }
+  if (health === 'EN_MORA') {
+    return (
+      participant.financialStatusSheet === 'Adeuda' ||
+      participant.financial.health === 'EN_MORA'
+    );
+  }
+  if (health === 'PAGADO_TOTAL') {
+    return (
+      participant.financialStatusSheet === 'Total Pagado' ||
+      participant.financial.health === 'PAGADO_TOTAL'
+    );
+  }
+  if (health === 'BAJA') {
+    return participant.financialStatusSheet === 'BAJA' || participant.status === 'RETIRADO';
+  }
+  return true;
+}
+
+/**
+ * Computes synchronized spreadsheet summary fields after payment or fee changes.
+ */
+export function computeSheetSyncFields(params: {
+  installments: InstallmentInfo[];
+  payments: PaymentInfo[];
+  targetFeeUSD?: number | null;
+  planTotalAmount?: number | null;
+  currentStatus: string;
+}) {
+  const target = resolveParticipantTargetAmount(params.targetFeeUSD, params.planTotalAmount);
+  const financial = calculateFinancialSummary(params.installments, params.payments, target);
+
+  let financialStatusSheet = 'Al Día';
+  if (params.currentStatus === 'RETIRADO') {
+    financialStatusSheet = 'BAJA';
+  } else if (financial.isFullyPaid) {
+    financialStatusSheet = 'Total Pagado';
+  } else if (financial.isOverdue) {
+    financialStatusSheet = 'Adeuda';
+  }
+
+  return {
+    totalPaidSheet: financial.totalPaid,
+    debtFinalUSD: financial.balanceRemaining,
+    debtToDateUSD: financial.overdueAmount,
+    overpaymentUSD: Math.max(0, financial.totalPaid - target),
+    financialStatusSheet,
+    financial,
+  };
+}
+
+/**
+ * Formats an amount in the requested currency (USD, EUR, CLP) with safe fallback for unknown codes.
+ */
+export function formatCurrency(amount: number, currency = 'USD'): string {
+  const code = (currency || 'USD').trim().toUpperCase();
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const localeMap: Record<string, string> = {
+    USD: 'en-US',
+    EUR: 'es-CL',
+    CLP: 'es-CL',
+  };
+  const locale = localeMap[code] || 'en-US';
+  const isClp = code === 'CLP';
+
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: code,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: isClp ? 0 : 2,
+    }).format(safeAmount);
+  } catch {
+    const formatted = new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(safeAmount);
+    return `${code} ${formatted}`;
+  }
+}
+
+/**
  * Formato de moneda USD estándar
  */
 export function formatUSD(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amount);
+  return formatCurrency(amount, 'USD');
 }
