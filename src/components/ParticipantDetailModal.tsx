@@ -700,7 +700,7 @@ export function ParticipantDetailModal({
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 mt-0.5">
                                 <span>
                                   {new Date(p.paymentDate).toLocaleDateString('es-CL', {
                                     year: 'numeric',
@@ -709,6 +709,17 @@ export function ParticipantDetailModal({
                                   })}
                                 </span>
                                 {p.notes && <span>• {p.notes}</span>}
+                                {p.receiptUrl && (
+                                  <a
+                                    href={p.receiptUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-[#001558] hover:underline font-bold"
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                    Ver Comprobante
+                                  </a>
+                                )}
                               </div>
                             </div>
                           </div>

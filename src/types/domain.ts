@@ -116,6 +116,9 @@ export interface PaymentDTO {
   paymentDate: string | Date;
   paymentMethod: string;
   transactionReference?: string | null;
+  receiptUrl?: string | null;
+  filloutSubmissionId?: string | null;
+  source?: string | null;
   notes?: string | null;
   registeredById?: string | null;
   registeredBy?: {

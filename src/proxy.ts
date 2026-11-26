@@ -7,6 +7,7 @@ const SESSION_COOKIE_NAME = 'agsch_session';
 const PUBLIC_PATH_PREFIXES = [
   '/login',
   '/api/auth/login',
+  '/api/webhooks/fillout',
   '/ficha-medica',
   '/medico',
   '/api/medical',

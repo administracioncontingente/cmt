@@ -320,13 +320,19 @@ model Payment {
   participant          Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
   amount               Float        // En moneda del evento (USD)
   paymentDate          DateTime     @default(now())
-  paymentMethod        String       @default("TRANSFERENCIA") // TRANSFERENCIA, TARJETA, EFECTIVO, OTRO
+  paymentMethod        String       @default("TRANSFERENCIA") // TRANSFERENCIA, TARJETA, EFECTIVO, TRASPASO, DEVOLUCION, OTRO
   transactionReference String?      // N° de operación / Documento bancario
+  receiptUrl           String?      // URL del comprobante adjunto (ej: S3 de Fillout)
+  filloutSubmissionId  String?      @unique // ID único de envío en Fillout para idempotencia del webhook
+  source               String?      @default("MANUAL") // MANUAL, CSV_SHEET, FILLOUT_MAIN, FILLOUT_SUBFORM
   notes                String?
   registeredById       String?
   registeredBy         User?        @relation(fields: [registeredById], references: [id], onDelete: SetNull)
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
+
+  @@index([participantId])
+  @@index([transactionReference])
 }
 
 // -------------------------------------------------------------
