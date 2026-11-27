@@ -32,6 +32,20 @@ const participantDetailInclude = {
       comments: true,
     },
   },
+  kitSizes: {
+    include: {
+      kitItem: {
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          category: true,
+          includedQuantity: true,
+        },
+      },
+    },
+    orderBy: { kitItem: { sortOrder: 'asc' as const } },
+  },
 };
 
 export async function GET(
