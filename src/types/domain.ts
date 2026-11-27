@@ -343,6 +343,7 @@ export interface ParticipantDTO {
   medicalRecord?: MedicalRecordDTO | null;
   emailMessages?: EmailMessageDTO[];
   incidents?: IncidentDTO[];
+  kitSizes?: ParticipantKitSizeDTO[];
   financial?: FinancialSummary;
   notes?: string | null;
   createdAt?: string | Date;
@@ -466,4 +467,109 @@ export interface ParticipantsListResponseDTO {
   page: number;
   limit: number;
   totalPages: number;
+}
+
+export interface KitSizeGuideRow {
+  size: string;
+  chestCm?: string;
+  lengthCm?: string;
+  waistCm?: string;
+  hipCm?: string;
+  sleeveCm?: string;
+  headCm?: string;
+  neckCm?: string;
+  note?: string;
+}
+
+export interface EventKitItemDTO {
+  id: string;
+  eventId: string;
+  code: string;
+  name: string;
+  category: string;
+  description?: string | null;
+  availableSizes: string[];
+  availableFits: string[];
+  sizeGuide: KitSizeGuideRow[];
+  includedQuantity: number;
+  isRequired: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface ParticipantKitSizeDTO {
+  id?: string;
+  kitItemId: string;
+  size: string;
+  fit?: string | null;
+  notes?: string | null;
+  confirmedAt?: string | Date;
+  updatedAt?: string | Date;
+  kitItem?: {
+    id: string;
+    code: string;
+    name: string;
+    category: string;
+    includedQuantity: number;
+  };
+}
+
+export interface PortalHouseholdMemberDTO {
+  id: string;
+  rut: string;
+  firstName: string;
+  lastName: string;
+  contingentRole: string;
+  eventName?: string | null;
+  eventCode?: string | null;
+}
+
+export interface PortalMeResponseDTO {
+  participant: ParticipantDTO;
+  event: PublicEventDTO | null;
+  household: PortalHouseholdMemberDTO[];
+  kitItems: EventKitItemDTO[];
+  kitSizes: ParticipantKitSizeDTO[];
+  qrEmergencyUrl?: string | null;
+  qrDataUrl?: string | null;
+  sessionEmail: string;
+}
+
+export interface KitMatrixCellDTO {
+  size: string;
+  fit: string;
+  count: number;
+  units: number;
+}
+
+export interface KitItemSummaryDTO {
+  item: EventKitItemDTO;
+  totalConfirmedParticipants: number;
+  totalUnits: number;
+  breakdown: KitMatrixCellDTO[];
+}
+
+export interface KitParticipantRowDTO {
+  id: string;
+  rut: string;
+  firstName: string;
+  lastName: string;
+  secondLastName?: string | null;
+  contingentRole: string;
+  scoutGroup?: string | null;
+  unitName?: string | null;
+  cupoCode?: string | null;
+  uniformSize?: string | null;
+  kitStatus: 'COMPLETED' | 'PARTIAL' | 'PENDING';
+  selections: ParticipantKitSizeDTO[];
+}
+
+export interface KitMatrixSummaryDTO {
+  items: EventKitItemDTO[];
+  totalsByItem: KitItemSummaryDTO[];
+  completedParticipants: number;
+  partialParticipants: number;
+  pendingParticipants: number;
+  totalActiveParticipants: number;
+  participants: KitParticipantRowDTO[];
 }

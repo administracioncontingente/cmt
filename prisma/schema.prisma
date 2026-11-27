@@ -44,6 +44,7 @@ model Event {
   emailMessages EmailMessage[]
   incidents     Incident[]
   receipts      PaymentReceipt[]
+  kitItems      EventKitItem[]
 }
 
 model EventMembership {
@@ -201,6 +202,10 @@ model Participant {
   // Comunicaciones e Incidencias CRM
   emailMessages        EmailMessage[]
   incidents            Incident[]
+
+  // Portal del Participante y Kit
+  magicLinks           ParticipantMagicLink[]
+  kitSizes             ParticipantKitSize[]
 
   notes                String?
   createdAt            DateTime      @default(now())
@@ -462,4 +467,65 @@ model IncidentComment {
   createdAt  DateTime @default(now())
 
   @@index([incidentId])
+}
+
+// -------------------------------------------------------------
+// PORTAL DEL PARTICIPANTE (MAGIC LINKS Y KIT / TALLAS)
+// -------------------------------------------------------------
+
+model ParticipantMagicLink {
+  id            String      @id @default(cuid())
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  email         String
+  tokenHash     String      @unique
+  expiresAt     DateTime
+  usedAt        DateTime?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime    @default(now())
+
+  @@index([participantId])
+  @@index([email])
+  @@index([expiresAt])
+}
+
+model EventKitItem {
+  id               String               @id @default(cuid())
+  eventId          String
+  event            Event                @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  code             String
+  name             String
+  category         String               @default("SUPERIOR")
+  description      String?
+  availableSizes   String
+  availableFits    String?
+  sizeGuideJson    String?
+  includedQuantity Int                  @default(1)
+  isRequired       Boolean              @default(true)
+  isActive         Boolean              @default(true)
+  sortOrder        Int                  @default(0)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  selections       ParticipantKitSize[]
+
+  @@unique([eventId, code])
+  @@index([eventId])
+}
+
+model ParticipantKitSize {
+  id            String       @id @default(cuid())
+  participantId String
+  participant   Participant  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  kitItemId     String
+  kitItem       EventKitItem @relation(fields: [kitItemId], references: [id], onDelete: Cascade)
+  size          String
+  fit           String?
+  notes         String?
+  confirmedAt   DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([participantId, kitItemId])
+  @@index([participantId])
+  @@index([kitItemId])
 }

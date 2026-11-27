@@ -13,6 +13,8 @@ const PUBLIC_PATH_PREFIXES = [
   '/ficha-medica',
   '/medico',
   '/api/medical',
+  '/portal',
+  '/api/portal',
   '/_next',
   '/favicon.ico',
   '/public',
