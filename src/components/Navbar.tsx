@@ -9,6 +9,7 @@ import {
   HeartPulse,
   LogOut,
   Mail,
+  Shirt,
   User,
   Users,
   Wallet,
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { href: '/', label: 'Nómina', icon: Users },
   { href: '/finanzas', label: 'Tesorería', icon: Wallet },
   { href: '/salud', label: 'Salud', icon: HeartPulse },
+  { href: '/kit', label: 'Kit & Tallas', icon: Shirt },
   { href: '/crm', label: 'Inbox & Casos', icon: Mail },
 ] as const;
 

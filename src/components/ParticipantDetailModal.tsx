@@ -27,6 +27,7 @@ import {
   ChevronDown,
   ChevronUp,
   Layers,
+  Shirt,
 } from 'lucide-react';
 import { formatCurrency, FinancialSummary } from '@/lib/finance';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -1165,6 +1166,82 @@ export function ParticipantDetailModal({
                     </span>
                   </div>
                 </div>
+              </div>
+
+              {/* Confirmed Kit Garment Sizes */}
+              <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-200">
+                  <h3 className="text-xs font-bold text-[#001558] uppercase tracking-wider flex items-center gap-2">
+                    <Shirt className="w-4 h-4 text-[#FEB135]" />
+                    Tallas de Prendas del Kit Confirmadas
+                  </h3>
+                  {data.kitSizes && data.kitSizes.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                      {data.kitSizes.length}{' '}
+                      {data.kitSizes.length === 1
+                        ? 'prenda registrada'
+                        : 'prendas registradas'}
+                    </span>
+                  )}
+                </div>
+
+                {data.kitSizes && data.kitSizes.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {data.kitSizes.map((sel) => (
+                      <div
+                        key={sel.id || sel.kitItemId}
+                        className="bg-[#F5F6F8] border border-slate-200 rounded-xl p-3 space-y-1.5"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-[#001558] leading-snug">
+                              {sel.kitItem?.name || sel.kitItemId}
+                            </p>
+                            {sel.kitItem?.code && (
+                              <span className="text-[10px] font-mono text-slate-500">
+                                {sel.kitItem.code}
+                              </span>
+                            )}
+                          </div>
+                          <span className="px-1.5 py-0.5 rounded bg-[#FFF8E1] border border-[#FEB135] text-[#001558] font-mono font-black text-[10px] shrink-0">
+                            x{sel.kitItem?.includedQuantity || 1}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          <span className="px-2 py-0.5 rounded-md bg-[#001558] text-white font-bold text-[11px]">
+                            Talla {sel.size}
+                          </span>
+                          {sel.fit && (
+                            <span className="px-2 py-0.5 rounded-md bg-white border border-slate-300 text-slate-700 font-semibold text-[11px]">
+                              {sel.fit}
+                            </span>
+                          )}
+                        </div>
+
+                        {sel.notes && (
+                          <p className="text-[11px] text-slate-600 italic leading-snug pt-0.5">
+                            Nota: {sel.notes}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-[#F5F6F8] border border-slate-200 rounded-xl p-3.5 text-xs text-slate-600 flex flex-col gap-1">
+                    <p className="font-semibold text-slate-700">
+                      Aún no registra tallas detalladas por prenda en el Portal.
+                    </p>
+                    {data.uniformSize && (
+                      <p className="text-[11px] text-slate-500">
+                        Referencia heredada registrada:{' '}
+                        <span className="font-bold text-[#001558]">
+                          {data.uniformSize}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Scout Structure */}

@@ -14,6 +14,7 @@ import {
   EyeOff,
   Heart,
   Users,
+  UserCheck,
   Globe,
   AlertCircle,
   CreditCard,
@@ -301,51 +302,78 @@ export default function LoginPage() {
               )}
 
               {/* Accesos secundarios visibles para familias y participantes */}
-              <div className="mt-6 pt-5 border-t border-slate-200 space-y-2.5">
-                <div className="bg-[#EEF2FF] border border-[#001558]/20 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="mt-6 pt-5 border-t border-slate-200 space-y-3">
+                {/* Tarjeta Principal: Portal del Participante */}
+                <div className="bg-[#EEF2FF] border-2 border-[#001558]/25 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
                   <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-white border border-[#001558]/15 flex items-center justify-center shrink-0">
-                      <CreditCard className="w-4 h-4 text-[#001558]" />
+                    <div className="w-10 h-10 rounded-xl bg-[#001558] text-[#FEB135] flex items-center justify-center shrink-0 shadow-xs">
+                      <UserCheck className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-xs font-extrabold text-[#001558]">
-                        ¿Necesitas informar un comprobante de pago?
-                      </p>
-                      <p className="text-[11px] text-slate-600 leading-snug">
-                        Sube transferencias individuales o depósitos grupales con desglose directo.
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs sm:text-sm font-black text-[#001558]">
+                          Portal del Participante
+                        </p>
+                        <span className="px-2 py-0.5 rounded-full bg-[#FFF8E1] border border-[#FEB135] text-[#001558] text-[10px] font-extrabold">
+                          /portal
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-700 leading-snug mt-0.5">
+                        Consulta tus cuotas, actualiza tus datos, ficha médica,
+                        comprobantes y tallas del kit ingresando con un enlace a
+                        tu correo.
                       </p>
                     </div>
                   </div>
                   <Link
-                    href="/pagos"
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#001558] hover:bg-[#0b2370] text-white font-black text-xs whitespace-nowrap transition-colors shadow-xs shrink-0"
+                    href="/portal"
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#001558] hover:bg-[#0b2370] text-white font-black text-xs whitespace-nowrap transition-colors shadow-xs shrink-0"
                   >
-                    Portal de Pagos
+                    Ir al Portal
                     <ArrowRight className="w-3.5 h-3.5 text-[#FEB135]" />
                   </Link>
                 </div>
 
-                <div className="bg-[#FFFBF0] border border-[#FEB135]/60 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-white border border-[#FEB135]/50 flex items-center justify-center shrink-0">
-                      <Heart className="w-4 h-4 text-red-600" />
+                {/* Accesos compactos secundarios */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <Link
+                    href="/pagos"
+                    className="group bg-[#F5F6F8] hover:bg-[#EEF2FF] border border-slate-200 hover:border-[#001558]/30 rounded-xl p-3 flex items-center justify-between gap-2.5 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                        <CreditCard className="w-4 h-4 text-[#001558]" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-extrabold text-[#001558] truncate">
+                          Informar Pago Rápido
+                        </p>
+                        <p className="text-[10px] text-slate-600 truncate">
+                          Comprobante individual o grupal
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-extrabold text-[#001558]">
-                        ¿Eres participante o apoderado?
-                      </p>
-                      <p className="text-[11px] text-slate-600 leading-snug">
-                        Ingresa con tu RUT y código OTP para completar o revisar
-                        tu ficha de salud.
-                      </p>
-                    </div>
-                  </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#001558] shrink-0 transition-colors" />
+                  </Link>
+
                   <Link
                     href="/ficha-medica"
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] font-black text-xs whitespace-nowrap transition-colors shadow-xs shrink-0"
+                    className="group bg-[#FFFBF0] hover:bg-[#FFF8E1] border border-[#FEB135]/60 rounded-xl p-3 flex items-center justify-between gap-2.5 transition-colors"
                   >
-                    Portal de Ficha Médica Oficial
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-[#FEB135]/50 flex items-center justify-center shrink-0">
+                        <Heart className="w-4 h-4 text-red-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-extrabold text-[#001558] truncate">
+                          Ficha Médica por RUT
+                        </p>
+                        <p className="text-[10px] text-slate-600 truncate">
+                          Acceso directo con código OTP
+                        </p>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-[#001558]/60 group-hover:text-[#001558] shrink-0 transition-colors" />
                   </Link>
                 </div>
               </div>
