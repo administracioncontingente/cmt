@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import {
   X,
   Upload,
@@ -11,6 +11,7 @@ import {
   Loader2,
   FileText,
 } from 'lucide-react';
+import { useToast } from '@/components/ui/ToastProvider';
 import type { EventSummary, ImportResultDTO } from '@/types/domain';
 
 interface ImportModalProps {
@@ -19,27 +20,101 @@ interface ImportModalProps {
   onSuccess: () => void;
 }
 
+const ALLOWED_EXTENSIONS = ['.xlsx', '.xls', '.csv'];
+
+function isValidSpreadsheetFile(file: File): boolean {
+  const lowerName = file.name.toLowerCase();
+  return ALLOWED_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+}
+
 export function ImportModal({
   activeEvent,
   onClose,
   onSuccess,
 }: ImportModalProps) {
+  const { toast } = useToast();
+  const titleId = useId();
+  const dragCounterRef = useRef(0);
+
   const [file, setFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<ImportResultDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !uploading) {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [uploading, onClose]);
+
+  const acceptSelectedFile = (candidate: File) => {
+    if (!isValidSpreadsheetFile(candidate)) {
+      const msg =
+        'Formato de archivo no válido. Solo se permiten planillas Excel (.xlsx, .xls) o CSV (.csv).';
+      setError(msg);
+      toast.error(msg, 'Archivo incompatible');
+      return;
+    }
+
+    setFile(candidate);
+    setError(null);
+    setResult(null);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-      setError(null);
-      setResult(null);
+      acceptSelectedFile(e.target.files[0]);
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    setIsDragging(true);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+
+    if (uploading) return;
+    const droppedFile = e.dataTransfer.files?.[0];
+    if (droppedFile) {
+      acceptSelectedFile(droppedFile);
     }
   };
 
   const handleUpload = async () => {
     if (!file) {
-      setError('Por favor selecciona un archivo Excel (.xlsx) o CSV');
+      setError('Por favor selecciona un archivo Excel (.xlsx, .xls) o CSV');
       return;
     }
 
@@ -63,20 +138,38 @@ export function ImportModal({
         throw new Error(data.error || 'Error al procesar el archivo');
       }
 
-      setResult(data as ImportResultDTO);
+      const parsedResult = data as ImportResultDTO;
+      setResult(parsedResult);
+      toast.success(
+        `Se procesaron ${parsedResult.totalRows} filas (${parsedResult.importedCount} nuevos, ${parsedResult.updatedCount} actualizados).`,
+        'Carga masiva completada'
+      );
       onSuccess();
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : 'Error durante la carga masiva'
-      );
+      const msg =
+        err instanceof Error ? err.message : 'Error durante la carga masiva';
+      setError(msg);
+      toast.error(msg, 'Error en importación');
     } finally {
       setUploading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#001558]/40 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#001558]/40 backdrop-blur-xs p-4 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !uploading) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+      >
         {/* Header */}
         <div className="px-6 py-4 bg-[#001558] text-white border-b-4 border-b-[#FEB135] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -84,7 +177,7 @@ export function ImportModal({
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-extrabold text-white">
+              <h2 id={titleId} className="text-base font-extrabold text-white">
                 Carga Masiva de Participantes
               </h2>
               <p className="text-xs text-slate-200">
@@ -98,7 +191,9 @@ export function ImportModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-white/75 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            disabled={uploading}
+            aria-label="Cerrar modal"
+            className="p-2 rounded-xl text-white/75 hover:text-white hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -190,7 +285,17 @@ export function ImportModal({
           )}
 
           {/* Dropzone */}
-          <div className="border-2 border-dashed border-slate-300 hover:border-[#001558] rounded-2xl p-6 text-center bg-[#F5F6F8] hover:bg-[#FFFBF0]/60 transition-colors">
+          <div
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all ${
+              isDragging
+                ? 'border-[#001558] bg-[#FFF8E1] ring-2 ring-[#FEB135]'
+                : 'border-slate-300 hover:border-[#001558] bg-[#F5F6F8] hover:bg-[#FFFBF0]/60'
+            }`}
+          >
             <input
               type="file"
               id="file-upload"
@@ -202,13 +307,21 @@ export function ImportModal({
               htmlFor="file-upload"
               className="cursor-pointer flex flex-col items-center justify-center"
             >
-              <div className="w-12 h-12 rounded-2xl bg-white border border-[#FEB135] text-[#001558] flex items-center justify-center mb-2 shadow-xs">
+              <div
+                className={`w-12 h-12 rounded-2xl bg-white border flex items-center justify-center mb-2 shadow-xs transition-transform ${
+                  isDragging
+                    ? 'border-[#001558] text-[#001558] scale-105'
+                    : 'border-[#FEB135] text-[#001558]'
+                }`}
+              >
                 <Upload className="w-6 h-6" />
               </div>
               <p className="font-bold text-[#001558]">
-                {file
-                  ? file.name
-                  : 'Haz clic para seleccionar o arrastra tu archivo aquí'}
+                {isDragging
+                  ? 'Suelta tu planilla aquí para cargarla'
+                  : file
+                    ? file.name
+                    : 'Haz clic para seleccionar o arrastra tu archivo aquí'}
               </p>
               <p className="text-[11px] text-slate-500 mt-1">
                 Formatos soportados: Excel (.xlsx, .xls) o CSV
@@ -230,7 +343,8 @@ export function ImportModal({
               <button
                 type="button"
                 onClick={() => setFile(null)}
-                className="text-slate-500 hover:text-red-700 text-xs font-semibold cursor-pointer shrink-0 ml-2"
+                disabled={uploading}
+                className="text-slate-500 hover:text-red-700 text-xs font-semibold cursor-pointer shrink-0 ml-2 disabled:opacity-50"
               >
                 Remover
               </button>
@@ -243,7 +357,8 @@ export function ImportModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            disabled={uploading}
+            className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
           >
             {result ? 'Listo' : 'Cancelar'}
           </button>

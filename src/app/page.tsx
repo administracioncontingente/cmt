@@ -1,251 +1,261 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { Navbar } from '@/components/Navbar';
-import { StatsOverview } from '@/components/StatsOverview';
+import React, { useCallback, useEffect, useState } from 'react';
+import { AppShell, useAppShell } from '@/components/AppShell';
+import { StatsOverview, type StatsQuickFilter } from '@/components/StatsOverview';
 import { ParticipantTable } from '@/components/ParticipantTable';
 import { ParticipantDetailModal } from '@/components/ParticipantDetailModal';
 import { ParticipantFormModal } from '@/components/ParticipantFormModal';
 import { ImportModal } from '@/components/ImportModal';
-import { InboxAndIncidentsModal } from '@/components/InboxAndIncidentsModal';
-import { Loader2 } from 'lucide-react';
-import type {
-  DashboardStatsDTO,
-  EventPermissions,
-  EventSummary,
-  ParticipantDTO,
-  UserSessionDTO,
-} from '@/types/domain';
+import type { ParticipantDTO, ParticipantsListResponseDTO } from '@/types/domain';
 
-export default function DashboardPage() {
-  const router = useRouter();
+function DashboardContent() {
+  const {
+    activeEvent,
+    permissions,
+    statsData,
+    currency,
+    loadingStats,
+    eventVersion,
+    refreshStats,
+  } = useAppShell();
 
-  const [user, setUser] = useState<UserSessionDTO | null>(null);
-  const [authChecking, setAuthChecking] = useState(true);
-
-  // Dashboard Data
-  const [stats, setStats] = useState<DashboardStatsDTO['summary'] | null>(null);
-  const [activeEvent, setActiveEvent] = useState<EventSummary | null>(null);
-  const [permissions, setPermissions] = useState<EventPermissions | null>(null);
+  // Table Data & Pagination
   const [participants, setParticipants] = useState<ParticipantDTO[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [limit, setLimit] = useState(50);
+  const [pagination, setPagination] = useState({ page: 1, eventVersion: 0 });
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
-  // Filters
+  // Filters & Sorting
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [healthFilter, setHealthFilter] = useState('ALL');
+  const [medicalFilter, setMedicalFilter] = useState('ALL');
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   // Modals state
-  const [selectedParticipantId, setSelectedParticipantId] = useState<
-    string | null
-  >(null);
-  const [editingParticipant, setEditingParticipant] =
-    useState<ParticipantDTO | null>(null);
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
+  const [editingParticipant, setEditingParticipant] = useState<ParticipantDTO | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [showInboxModal, setShowInboxModal] = useState(false);
 
-  // Verify auth session
+  const currentPage =
+    pagination.eventVersion === eventVersion ? pagination.page : 1;
+
+  const setPage = useCallback(
+    (nextPage: number) => {
+      setPagination({ page: Math.max(1, nextPage), eventVersion });
+    },
+    [eventVersion]
+  );
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Load participants whenever query parameters or active event change
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
-    async function checkAuth() {
-      try {
-        const res = await fetch('/api/auth/me');
-        if (!res.ok) {
-          router.push('/login');
-          return;
-        }
-        const data = await res.json();
-        if (!cancelled) {
-          setUser(data.user ?? null);
-        }
-      } catch {
-        router.push('/login');
-      } finally {
-        if (!cancelled) {
-          setAuthChecking(false);
-        }
-      }
-    }
-
-    checkAuth();
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
-
-  // Fetch stats (for manual refreshes / event switch)
-  const fetchStats = useCallback(async () => {
-    try {
-      const res = await fetch('/api/stats');
-      if (res.ok) {
-        const data: DashboardStatsDTO = await res.json();
-        setStats(data.summary);
-        if (data.event) setActiveEvent(data.event);
-        setPermissions(data.permissions ?? null);
-      }
-    } catch (err) {
-      console.error('Error fetching stats:', err);
-    }
-  }, []);
-
-  // Fetch participants with current filters (for manual refreshes / event switch)
-  const fetchParticipants = useCallback(async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
-      if (roleFilter !== 'ALL') params.append('role', roleFilter);
-      if (statusFilter !== 'ALL') params.append('status', statusFilter);
-      if (healthFilter !== 'ALL') params.append('health', healthFilter);
-
-      const res = await fetch(`/api/participants?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setParticipants(data.participants || []);
-      }
-    } catch (err) {
-      console.error('Error fetching participants:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [searchTerm, roleFilter, statusFilter, healthFilter]);
-
-  // Load stats on mount once authenticated
-  useEffect(() => {
-    if (authChecking || !user) return;
-    let cancelled = false;
-
-    async function loadInitialStats() {
-      try {
-        const res = await fetch('/api/stats');
-        if (!cancelled && res.ok) {
-          const data: DashboardStatsDTO = await res.json();
-          setStats(data.summary);
-          if (data.event) setActiveEvent(data.event);
-          setPermissions(data.permissions ?? null);
-        }
-      } catch (err) {
-        console.error('Error fetching stats:', err);
-      }
-    }
-
-    loadInitialStats();
-    return () => {
-      cancelled = true;
-    };
-  }, [authChecking, user]);
-
-  // Load participants on mount and when filters change (debounced)
-  useEffect(() => {
-    if (authChecking || !user) return;
-    let cancelled = false;
-
-    const timeoutId = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       try {
         setLoading(true);
         const params = new URLSearchParams();
-        if (searchTerm) params.append('search', searchTerm);
-        if (roleFilter !== 'ALL') params.append('role', roleFilter);
-        if (statusFilter !== 'ALL') params.append('status', statusFilter);
-        if (healthFilter !== 'ALL') params.append('health', healthFilter);
+        params.set('page', String(currentPage));
+        params.set('limit', String(limit));
+        params.set('sortBy', sortBy);
+        params.set('sortDir', sortDir);
+        if (debouncedSearch) params.set('search', debouncedSearch);
+        if (roleFilter !== 'ALL') params.set('role', roleFilter);
+        if (statusFilter !== 'ALL') params.set('status', statusFilter);
+        if (healthFilter !== 'ALL') params.set('health', healthFilter);
+        if (medicalFilter !== 'ALL') params.set('medical', medicalFilter);
 
-        const res = await fetch(`/api/participants?${params.toString()}`);
+        const res = await fetch(`/api/participants?${params.toString()}`, {
+          signal: controller.signal,
+        });
         if (!cancelled && res.ok) {
-          const data = await res.json();
+          const data = (await res.json()) as ParticipantsListResponseDTO;
           setParticipants(data.participants || []);
+          setTotalCount(data.totalCount ?? 0);
+          setTotalPages(Math.max(1, data.totalPages ?? 1));
         }
-      } catch (err) {
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
         console.error('Error fetching participants:', err);
       } finally {
         if (!cancelled) {
           setLoading(false);
         }
       }
-    }, 200);
+    }, 0);
 
     return () => {
       cancelled = true;
-      clearTimeout(timeoutId);
+      clearTimeout(timer);
+      controller.abort();
     };
-  }, [authChecking, user, searchTerm, roleFilter, statusFilter, healthFilter]);
+  }, [
+    currentPage,
+    limit,
+    sortBy,
+    sortDir,
+    debouncedSearch,
+    roleFilter,
+    statusFilter,
+    healthFilter,
+    medicalFilter,
+    eventVersion,
+    refreshNonce,
+  ]);
 
   const handleRefreshAll = useCallback(() => {
-    fetchStats();
-    fetchParticipants();
-  }, [fetchStats, fetchParticipants]);
+    void refreshStats();
+    setRefreshNonce((n) => n + 1);
+  }, [refreshStats]);
 
-  if (authChecking) {
-    return (
-      <div className="min-h-screen bg-[#F5F6F8] flex items-center justify-center text-slate-600">
-        <Loader2 className="w-8 h-8 animate-spin text-[#001558]" />
-      </div>
-    );
-  }
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchTerm(value);
+      setPage(1);
+    },
+    [setPage]
+  );
 
-  const currency = activeEvent?.currency || 'USD';
+  const handleRoleChange = useCallback(
+    (value: string) => {
+      setRoleFilter(value);
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const handleStatusChange = useCallback(
+    (value: string) => {
+      setStatusFilter(value);
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const handleHealthChange = useCallback(
+    (value: string) => {
+      setHealthFilter(value);
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const handleMedicalChange = useCallback(
+    (value: string) => {
+      setMedicalFilter(value);
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const handleSortByChange = useCallback(
+    (value: string) => {
+      setSortBy(value);
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const handleSortDirChange = useCallback(
+    (value: 'asc' | 'desc') => {
+      setSortDir(value);
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const handleLimitChange = useCallback(
+    (nextLimit: number) => {
+      setLimit(nextLimit);
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const handleQuickFilter = useCallback(
+    (filter: StatsQuickFilter) => {
+      if (filter.role !== undefined) setRoleFilter(filter.role);
+      if (filter.status !== undefined) setStatusFilter(filter.status);
+      if (filter.health !== undefined) setHealthFilter(filter.health);
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const handleResetFilters = useCallback(() => {
+    setSearchTerm('');
+    setDebouncedSearch('');
+    setRoleFilter('ALL');
+    setStatusFilter('ALL');
+    setHealthFilter('ALL');
+    setMedicalFilter('ALL');
+    setPage(1);
+  }, [setPage]);
 
   return (
-    <div className="min-h-screen bg-[#F5F6F8] text-slate-800 flex flex-col font-sans">
-      <Navbar
-        user={user}
-        onOpenInbox={() => setShowInboxModal(true)}
-        onEventChange={(ev) => {
-          setActiveEvent(ev);
-          handleRefreshAll();
-        }}
+    <>
+      {/* Metric Cards & Executive Summary */}
+      <StatsOverview
+        stats={statsData?.summary ?? null}
+        statsData={statsData}
+        loading={loadingStats}
+        currency={currency}
+        activeRoleFilter={roleFilter}
+        activeHealthFilter={healthFilter}
+        activeStatusFilter={statusFilter}
+        onQuickFilter={handleQuickFilter}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Metric Cards */}
-        <StatsOverview stats={stats} currency={currency} />
-
-        {/* Main Participants Management Table */}
-        <ParticipantTable
-          participants={participants}
-          loading={loading}
-          currency={currency}
-          permissions={permissions}
-          onRefresh={handleRefreshAll}
-          onSelectParticipant={(id) => setSelectedParticipantId(id)}
-          onEditParticipant={(p) => setEditingParticipant(p)}
-          onNewParticipant={() => setShowCreateModal(true)}
-          onOpenImport={() => setShowImportModal(true)}
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-          roleFilter={roleFilter}
-          setRoleFilter={setRoleFilter}
-          statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
-          healthFilter={healthFilter}
-          setHealthFilter={setHealthFilter}
-        />
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>
-            Asociación de Guías y Scouts de Chile •{' '}
-            {activeEvent?.name ||
-              'Contingente Nacional al 26° World Scout Jamboree Polonia 2027'}
-          </span>
-          <span className="text-[11px] text-slate-500">
-            Diseño e Identidad Visual conforme a{' '}
-            <a
-              href="https://kitdigital.agsch.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[#001558] hover:underline font-bold"
-            >
-              Kit Digital AGSCH
-            </a>
-          </span>
-        </div>
-      </footer>
+      {/* Main Participants Management Table */}
+      <ParticipantTable
+        participants={participants}
+        loading={loading}
+        currency={currency}
+        permissions={permissions}
+        onRefresh={handleRefreshAll}
+        onSelectParticipant={(id) => setSelectedParticipantId(id)}
+        onEditParticipant={(p) => setEditingParticipant(p)}
+        onNewParticipant={() => setShowCreateModal(true)}
+        onOpenImport={() => setShowImportModal(true)}
+        searchTerm={searchTerm}
+        setSearchTerm={handleSearchChange}
+        roleFilter={roleFilter}
+        setRoleFilter={handleRoleChange}
+        statusFilter={statusFilter}
+        setStatusFilter={handleStatusChange}
+        healthFilter={healthFilter}
+        setHealthFilter={handleHealthChange}
+        medicalFilter={medicalFilter}
+        setMedicalFilter={handleMedicalChange}
+        sortBy={sortBy}
+        setSortBy={handleSortByChange}
+        sortDir={sortDir}
+        setSortDir={handleSortDirChange}
+        totalCount={totalCount}
+        page={currentPage}
+        totalPages={totalPages}
+        limit={limit}
+        onPageChange={setPage}
+        onLimitChange={handleLimitChange}
+        onResetFilters={handleResetFilters}
+      />
 
       {/* Modals */}
       {selectedParticipantId && (
@@ -288,20 +298,14 @@ export default function DashboardPage() {
           onSuccess={handleRefreshAll}
         />
       )}
+    </>
+  );
+}
 
-      {showInboxModal && (
-        <InboxAndIncidentsModal
-          isOpen={showInboxModal}
-          onClose={() => setShowInboxModal(false)}
-          activeEvent={activeEvent}
-          currentUser={user}
-          permissions={permissions}
-          onSelectParticipant={(pId) => {
-            setShowInboxModal(false);
-            setSelectedParticipantId(pId);
-          }}
-        />
-      )}
-    </div>
+export default function DashboardPage() {
+  return (
+    <AppShell>
+      <DashboardContent />
+    </AppShell>
   );
 }
