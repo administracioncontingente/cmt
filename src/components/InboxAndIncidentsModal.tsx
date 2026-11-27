@@ -26,6 +26,15 @@ import type {
   EventPermissions,
 } from '@/types/domain';
 
+export interface CrmWorkspaceProps {
+  activeEvent: EventSummary | null;
+  currentUser: UserSessionDTO | null;
+  permissions?: EventPermissions | null;
+  onSelectParticipant?: (participantId: string) => void;
+  embedded?: boolean;
+  onClose?: () => void;
+}
+
 export interface InboxAndIncidentsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -35,20 +44,51 @@ export interface InboxAndIncidentsModalProps {
   onSelectParticipant?: (participantId: string) => void;
 }
 
-export function InboxAndIncidentsModal({
-  isOpen,
-  onClose,
+interface InboxMetrics {
+  total: number;
+  associated: number;
+  unassociated: number;
+  tickets: number;
+}
+
+interface IncidentMetrics {
+  total: number;
+  ABIERTA: number;
+  EN_PROCESO: number;
+  RESUELTA: number;
+  CERRADA: number;
+}
+
+const EMPTY_INBOX_METRICS: InboxMetrics = {
+  total: 0,
+  associated: 0,
+  unassociated: 0,
+  tickets: 0,
+};
+
+const EMPTY_INCIDENT_METRICS: IncidentMetrics = {
+  total: 0,
+  ABIERTA: 0,
+  EN_PROCESO: 0,
+  RESUELTA: 0,
+  CERRADA: 0,
+};
+
+export function CrmWorkspace({
   activeEvent,
   currentUser,
   permissions,
   onSelectParticipant,
-}: InboxAndIncidentsModalProps) {
+  embedded = false,
+  onClose,
+}: CrmWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<'inbox' | 'incidents'>('inbox');
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
   // Inbox state
   const [messages, setMessages] = useState<EmailMessageDTO[]>([]);
+  const [inboxMetrics, setInboxMetrics] = useState<InboxMetrics>(EMPTY_INBOX_METRICS);
   const [inboxFilter, setInboxFilter] = useState<'all' | 'associated' | 'unassociated' | 'tickets'>('all');
   const [inboxSearch, setInboxSearch] = useState('');
   const [selectedMessage, setSelectedMessage] = useState<EmailMessageDTO | null>(null);
@@ -56,6 +96,7 @@ export function InboxAndIncidentsModal({
 
   // Incidents state
   const [incidents, setIncidents] = useState<IncidentDTO[]>([]);
+  const [incidentMetrics, setIncidentMetrics] = useState<IncidentMetrics>(EMPTY_INCIDENT_METRICS);
   const [incidentFilterStatus, setIncidentFilterStatus] = useState('ALL');
   const [incidentFilterCategory, setIncidentFilterCategory] = useState('ALL');
   const [incidentSearch, setIncidentSearch] = useState('');
@@ -102,8 +143,14 @@ export function InboxAndIncidentsModal({
 
       const res = await fetch(`/api/inbox?${params.toString()}`);
       if (res.ok) {
-        const data = (await res.json()) as { messages?: EmailMessageDTO[] };
+        const data = (await res.json()) as {
+          messages?: EmailMessageDTO[];
+          metrics?: InboxMetrics;
+        };
         setMessages(data.messages || []);
+        if (data.metrics) {
+          setInboxMetrics(data.metrics);
+        }
       }
     } catch (err: unknown) {
       console.error('Error loading messages:', err);
@@ -123,8 +170,14 @@ export function InboxAndIncidentsModal({
 
       const res = await fetch(`/api/incidents?${params.toString()}`);
       if (res.ok) {
-        const data = (await res.json()) as { incidents?: IncidentDTO[] };
+        const data = (await res.json()) as {
+          incidents?: IncidentDTO[];
+          metrics?: IncidentMetrics;
+        };
         setIncidents(data.incidents || []);
+        if (data.metrics) {
+          setIncidentMetrics(data.metrics);
+        }
       }
     } catch (err: unknown) {
       console.error('Error loading incidents:', err);
@@ -134,17 +187,13 @@ export function InboxAndIncidentsModal({
   }, [activeEventId, incidentFilterStatus, incidentFilterCategory, incidentSearch]);
 
   useEffect(() => {
-    if (!isOpen || !activeEventId) return;
+    if (!activeEventId) return;
     let cancelled = false;
 
     const run = async () => {
       await Promise.resolve();
       if (cancelled) return;
-      if (activeTab === 'inbox') {
-        await loadMessages();
-      } else {
-        await loadIncidents();
-      }
+      await loadMessages();
     };
 
     void run();
@@ -152,7 +201,44 @@ export function InboxAndIncidentsModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, activeEventId, activeTab, loadMessages, loadIncidents]);
+  }, [activeEventId, loadMessages]);
+
+  useEffect(() => {
+    if (!activeEventId) return;
+    let cancelled = false;
+
+    const run = async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+      await loadIncidents();
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeEventId, loadIncidents]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (showAssociateModal) {
+        setShowAssociateModal(false);
+        return;
+      }
+      if (showNewTicketModal) {
+        setShowNewTicketModal(false);
+        return;
+      }
+      if (!embedded && onClose) {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [embedded, onClose, showAssociateModal, showNewTicketModal]);
 
   // Sincronizar correos desde Gmail / Simulación
   const handleSyncInbox = async () => {
@@ -453,48 +539,54 @@ export function InboxAndIncidentsModal({
     return 'bg-slate-100 text-slate-600 border-slate-200';
   };
 
-  if (!isOpen) return null;
+  const openCasesCount = incidentMetrics.ABIERTA + incidentMetrics.EN_PROCESO;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-[#001558]/40 backdrop-blur-xs">
-      <div className="bg-white border border-slate-200 w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[92vh]">
-        {/* Header */}
-        <div className="bg-[#001558] px-6 py-4 border-b-4 border-b-[#FEB135] flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-[#FEB135] text-[#001558] flex items-center justify-center shrink-0">
-              {activeTab === 'inbox' ? <Mail className="w-5 h-5" /> : <Ticket className="w-5 h-5" />}
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base sm:text-lg font-black text-white truncate">
-                  Centro de Comunicaciones & Incidencias CRM
-                </h2>
-                {activeEvent && (
-                  <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#FEB135] text-[#001558]">
-                    {activeEvent.shortName || activeEvent.name}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-200 truncate">
-                Lectura de correos, asociación a participantes y seguimiento de casos
-                {currentUser?.name ? ` • Operador: ${currentUser.name}` : ''}
-              </p>
-            </div>
+  const workspaceCard = (
+    <div
+      className={
+        embedded
+          ? 'bg-white border border-slate-200 w-full rounded-2xl shadow-xs overflow-hidden flex flex-col'
+          : 'bg-white border border-slate-200 w-full max-w-6xl rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[92vh]'
+      }
+    >
+      {/* Header */}
+      <div className="bg-[#001558] px-6 py-4 border-b-4 border-b-[#FEB135] flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-[#FEB135] text-[#001558] flex items-center justify-center shrink-0">
+            {activeTab === 'inbox' ? <Mail className="w-5 h-5" /> : <Ticket className="w-5 h-5" />}
           </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base sm:text-lg font-black text-white truncate">
+                Centro de Comunicaciones & Incidencias CRM
+              </h2>
+              {activeEvent && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#FEB135] text-[#001558]">
+                  {activeEvent.shortName || activeEvent.name}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-200 truncate">
+              Lectura de correos, asociación a participantes y seguimiento de casos
+              {currentUser?.name ? ` • Operador: ${currentUser.name}` : ''}
+            </p>
+          </div>
+        </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {canManageCrm && (
-              <button
-                onClick={handleSyncInbox}
-                disabled={syncing}
-                className="px-3.5 py-1.5 rounded-xl bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] text-xs font-black transition flex items-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer"
-                title="Sincronizar correos de Gmail o generar muestra"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">Sincronizar Inbox</span>
-              </button>
-            )}
+        <div className="flex items-center gap-2 shrink-0">
+          {canManageCrm && (
+            <button
+              onClick={handleSyncInbox}
+              disabled={syncing}
+              className="px-3.5 py-1.5 rounded-xl bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] text-xs font-black transition flex items-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer"
+              title="Sincronizar correos de Gmail o generar muestra"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Sincronizar Inbox</span>
+            </button>
+          )}
 
+          {!embedded && onClose && (
             <button
               onClick={onClose}
               className="text-slate-200 hover:text-white p-2 rounded-lg hover:bg-white/10 transition cursor-pointer"
@@ -502,8 +594,9 @@ export function InboxAndIncidentsModal({
             >
               <X className="w-5 h-5" />
             </button>
-          </div>
+          )}
         </div>
+      </div>
 
         {/* Tab Navigation */}
         <div className="flex items-center justify-between px-4 sm:px-6 bg-[#F5F6F8] border-b border-slate-200 overflow-x-auto">
@@ -577,7 +670,13 @@ export function InboxAndIncidentsModal({
         )}
 
         {/* Main Content Area */}
-        <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+        <div
+          className={
+            embedded
+              ? 'flex-1 flex flex-col md:flex-row min-h-[540px]'
+              : 'flex-1 overflow-hidden flex flex-col md:flex-row'
+          }
+        >
           {/* TAB 1: INBOX */}
           {activeTab === 'inbox' && (
             <>
@@ -1163,10 +1262,84 @@ export function InboxAndIncidentsModal({
           )}
         </div>
       </div>
+  );
+
+  return (
+    <>
+      {embedded ? (
+        <div className="space-y-4">
+          {/* Franja superior compacta con 4 mini KPIs */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-xs flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Correos cargados
+                </p>
+                <p className="text-xl font-black text-[#001558] mt-0.5">
+                  {inboxMetrics.total.toLocaleString('es-CL')}
+                </p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-[#EEF2FF] border border-[#001558]/15 text-[#001558] flex items-center justify-center shrink-0">
+                <Mail className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-xs flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Correos sin vincular
+                </p>
+                <p className="text-xl font-black text-[#001558] mt-0.5">
+                  {inboxMetrics.unassociated.toLocaleString('es-CL')}
+                </p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-[#FFF8E1] border border-[#FEB135] text-[#001558] flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-xs flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Casos abiertos / en proceso
+                </p>
+                <p className="text-xl font-black text-[#001558] mt-0.5">
+                  {openCasesCount.toLocaleString('es-CL')}
+                </p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-[#EEF2FF] border border-[#001558]/15 text-[#001558] flex items-center justify-center shrink-0">
+                <Ticket className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-xs flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Casos resueltos
+                </p>
+                <p className="text-xl font-black text-emerald-700 mt-0.5">
+                  {incidentMetrics.RESUELTA.toLocaleString('es-CL')}
+                </p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            </div>
+          </div>
+
+          {workspaceCard}
+        </div>
+      ) : (
+        workspaceCard
+      )}
 
       {/* Modal para Crear / Convertir en Incidencia */}
       {showNewTicketModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#001558]/40 backdrop-blur-xs">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#001558]/40 backdrop-blur-xs"
+        >
           <div className="bg-white border border-slate-200 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
             <div className="bg-[#001558] px-6 py-4 border-b-4 border-b-[#FEB135] flex items-center justify-between">
               <h3 className="text-sm font-black text-white flex items-center gap-2">
@@ -1355,7 +1528,11 @@ export function InboxAndIncidentsModal({
 
       {/* Modal de Asociación Manual de Correo a Participante */}
       {showAssociateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#001558]/40 backdrop-blur-xs">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#001558]/40 backdrop-blur-xs"
+        >
           <div className="bg-white border border-slate-200 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
             <div className="bg-[#001558] px-6 py-4 border-b-4 border-b-[#FEB135] flex items-center justify-between">
               <h3 className="text-sm font-black text-white flex items-center gap-2">
@@ -1428,6 +1605,35 @@ export function InboxAndIncidentsModal({
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+export function InboxAndIncidentsModal({
+  isOpen,
+  onClose,
+  activeEvent,
+  currentUser,
+  permissions,
+  onSelectParticipant,
+}: InboxAndIncidentsModalProps) {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Centro de Comunicaciones e Incidencias CRM"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-[#001558]/40 backdrop-blur-xs"
+    >
+      <CrmWorkspace
+        activeEvent={activeEvent}
+        currentUser={currentUser}
+        permissions={permissions}
+        onSelectParticipant={onSelectParticipant}
+        embedded={false}
+        onClose={onClose}
+      />
     </div>
   );
 }
