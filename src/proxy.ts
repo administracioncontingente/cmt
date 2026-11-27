@@ -8,6 +8,8 @@ const PUBLIC_PATH_PREFIXES = [
   '/login',
   '/api/auth/login',
   '/api/webhooks/fillout',
+  '/api/public',
+  '/pagos',
   '/ficha-medica',
   '/medico',
   '/api/medical',

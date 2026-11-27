@@ -5,12 +5,14 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
+  Copy,
   CreditCard,
   ExternalLink,
   FileCheck2,
   FilterX,
   Layers,
   Loader2,
+  PlusCircle,
   RefreshCw,
   Search,
   Sparkles,
@@ -20,6 +22,8 @@ import {
 } from 'lucide-react';
 import { AppShell, useAppShell } from '@/components/AppShell';
 import { ParticipantDetailModal } from '@/components/ParticipantDetailModal';
+import { DirectPaymentModal } from '@/components/DirectPaymentModal';
+import { useToast } from '@/components/ui/ToastProvider';
 import { formatCurrency } from '@/lib/finance';
 import type {
   PaymentLedgerItemDTO,
@@ -34,6 +38,7 @@ const EMPTY_SUMMARY: PaymentsLedgerSummaryDTO = {
   totalAmount: 0,
   totalCount: 0,
   filloutCount: 0,
+  portalCount: 0,
   withReceiptCount: 0,
   last30DaysAmount: 0,
   sourceCounts: {},
@@ -41,10 +46,13 @@ const EMPTY_SUMMARY: PaymentsLedgerSummaryDTO = {
 
 const SOURCE_OPTIONS = [
   { value: 'ALL', label: 'Todos los orígenes' },
+  { value: 'PORTAL_FORM', label: 'Formulario Web' },
+  { value: 'PORTAL_GROUP_FORM', label: 'Formulario Grupal' },
   { value: 'FILLOUT_MAIN', label: 'Fillout Principal' },
   { value: 'FILLOUT_SUBFORM', label: 'Fillout Grupal' },
   { value: 'CSV_SHEET', label: 'Planilla' },
   { value: 'MANUAL', label: 'Manual' },
+  { value: 'MANUAL_GROUP', label: 'Manual Grupal' },
 ] as const;
 
 const METHOD_OPTIONS = [
@@ -70,6 +78,21 @@ function getSourceBadge(source?: string | null): {
 } {
   const normalized = (source || 'MANUAL').toUpperCase();
   switch (normalized) {
+    case 'PORTAL_FORM':
+      return {
+        label: 'Formulario Web',
+        className: 'bg-[#FFF8E1] text-[#001558] border-[#FEB135]',
+      };
+    case 'PORTAL_GROUP_FORM':
+      return {
+        label: 'Formulario Grupal',
+        className: 'bg-sky-50 text-sky-900 border-sky-200',
+      };
+    case 'MANUAL_GROUP':
+      return {
+        label: 'Manual Grupal',
+        className: 'bg-purple-50 text-purple-800 border-purple-200',
+      };
     case 'FILLOUT_MAIN':
       return {
         label: 'Fillout Principal',
@@ -141,8 +164,10 @@ function truncateId(value?: string | null, maxLen = 14): string {
 function FinanzasWorkspace() {
   const { activeEvent, permissions, currency, eventVersion, refreshStats } =
     useAppShell();
+  const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<FinanzasTab>('ledger');
+  const [showDirectPaymentModal, setShowDirectPaymentModal] = useState(false);
   const [selectedParticipantId, setSelectedParticipantId] = useState<
     string | null
   >(null);
@@ -330,6 +355,25 @@ function FinanzasWorkspace() {
     void refreshStats();
   }, [refreshStats]);
 
+  const portalPath = activeEvent?.code
+    ? `/pagos/${encodeURIComponent(activeEvent.code)}`
+    : '/pagos';
+
+  const handleCopyPortalLink = useCallback(async () => {
+    const origin =
+      typeof window !== 'undefined' ? window.location.origin : '';
+    const fullUrl = `${origin}${portalPath}`;
+    try {
+      await navigator.clipboard.writeText(fullUrl);
+      toast.success(
+        `Enlace copiado: ${fullUrl}`,
+        'Portal de Comprobantes de Pago'
+      );
+    } catch {
+      toast.error('No se pudo copiar el enlace al portapapeles');
+    }
+  }, [portalPath, toast]);
+
   const hasActiveFilters =
     Boolean(searchInput.trim()) ||
     sourceFilter !== 'ALL' ||
@@ -367,8 +411,40 @@ function FinanzasWorkspace() {
             </div>
           </div>
 
-          {/* Local Tabs */}
+          {/* Local Tabs & Actions */}
           <div className="flex flex-wrap items-center gap-2">
+            {(!permissions || permissions.canManageFinance) && (
+              <button
+                type="button"
+                onClick={() => setShowDirectPaymentModal(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] text-xs font-extrabold transition-colors shadow-xs cursor-pointer"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span>+ Registrar Pago / Grupal</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => void handleCopyPortalLink()}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#FFFBF0] hover:bg-[#FFF8E1] border border-[#FEB135]/60 text-xs font-bold text-[#001558] transition-colors cursor-pointer"
+              title="Copiar URL pública para participantes y dirigentes"
+            >
+              <Copy className="w-3.5 h-3.5 text-[#001558]" />
+              <span>Copiar enlace de pagos</span>
+            </button>
+
+            <a
+              href={portalPath}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-[#EEF2FF] border border-slate-200 text-xs font-bold text-[#001558] transition-colors"
+              title="Abrir portal público de ingreso de comprobantes"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Ver portal /pagos</span>
+            </a>
+
             <div className="inline-flex p-1 rounded-xl bg-[#F5F6F8] border border-slate-200">
               <button
                 type="button"
@@ -380,7 +456,7 @@ function FinanzasWorkspace() {
                 }`}
               >
                 <CreditCard className="w-3.5 h-3.5 text-[#FEB135]" />
-                Libro de Pagos y Fillout
+                Libro de Pagos
               </button>
               <button
                 type="button"
@@ -392,14 +468,14 @@ function FinanzasWorkspace() {
                 }`}
               >
                 <CalendarClock className="w-3.5 h-3.5 text-[#FEB135]" />
-                Planes y Calendario de Cuotas
+                Planes y Cuotas
               </button>
             </div>
 
             <button
               type="button"
               onClick={handleReload}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-[#FFFBF0] border border-slate-200 hover:border-[#FEB135] text-xs font-bold text-[#001558] transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-[#FFFBF0] border border-slate-200 hover:border-[#FEB135] text-xs font-bold text-[#001558] transition-colors cursor-pointer"
               title="Recargar información financiera"
             >
               <RefreshCw
@@ -407,7 +483,6 @@ function FinanzasWorkspace() {
                   loadingLedger || loadingPlans ? 'animate-spin' : ''
                 }`}
               />
-              <span>Recargar</span>
             </button>
           </div>
         </div>
@@ -456,18 +531,20 @@ function FinanzasWorkspace() {
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Pagos vía Fillout
+                  Pagos Web y Fillout
                 </span>
                 <div className="w-9 h-9 rounded-xl bg-[#FFF8E1] border border-[#FEB135] text-[#001558] flex items-center justify-center">
                   <Sparkles className="w-4 h-4" />
                 </div>
               </div>
               <p className="text-2xl sm:text-3xl font-extrabold text-[#001558]">
-                {summary.filloutCount.toLocaleString('es-CL')}
+                {(
+                  (summary.portalCount ?? 0) + summary.filloutCount
+                ).toLocaleString('es-CL')}
               </p>
               <p className="text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-100">
-                Principal: {summary.sourceCounts.FILLOUT_MAIN ?? 0} • Grupal:{' '}
-                {summary.sourceCounts.FILLOUT_SUBFORM ?? 0}
+                Portal Web: {summary.portalCount ?? 0} • Fillout:{' '}
+                {summary.filloutCount}
               </p>
             </div>
 
@@ -1038,6 +1115,15 @@ function FinanzasWorkspace() {
           onParticipantUpdated={handleReload}
         />
       )}
+
+      {/* Direct Payment Registration Modal */}
+      <DirectPaymentModal
+        isOpen={showDirectPaymentModal}
+        activeEvent={activeEvent}
+        currency={effectiveCurrency}
+        onClose={() => setShowDirectPaymentModal(false)}
+        onSuccess={handleReload}
+      />
     </div>
   );
 }

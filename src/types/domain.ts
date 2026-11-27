@@ -414,9 +414,39 @@ export interface PaymentsLedgerSummaryDTO {
   totalAmount: number;
   totalCount: number;
   filloutCount: number;
+  portalCount?: number;
   withReceiptCount: number;
   last30DaysAmount: number;
   sourceCounts: Record<string, number>;
+}
+
+export interface PublicEventDTO {
+  id: string;
+  code: string;
+  name: string;
+  shortName?: string | null;
+  flagEmoji?: string | null;
+  currency: string;
+  country?: string | null;
+  city?: string | null;
+  isDefault?: boolean;
+}
+
+export interface PublicParticipantLookupDTO {
+  found: boolean;
+  maskedName?: string;
+  scoutGroup?: string | null;
+  unitName?: string | null;
+  cupoCode?: string | null;
+  roleLabel?: string;
+  error?: string;
+}
+
+export interface GroupAllocationInputDTO {
+  rut: string;
+  participantId?: string;
+  amount: number;
+  groupName?: string;
 }
 
 export interface PaymentsLedgerResponseDTO {

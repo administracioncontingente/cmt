@@ -16,6 +16,7 @@ import {
   Users,
   Globe,
   AlertCircle,
+  CreditCard,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/ToastProvider';
 
@@ -299,9 +300,32 @@ export default function LoginPage() {
                 </div>
               )}
 
-              {/* Acceso secundario visible para familias y participantes */}
-              <div className="mt-6 pt-5 border-t border-slate-200">
-                <div className="bg-[#FFFBF0] border border-[#FEB135]/60 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Accesos secundarios visibles para familias y participantes */}
+              <div className="mt-6 pt-5 border-t border-slate-200 space-y-2.5">
+                <div className="bg-[#EEF2FF] border border-[#001558]/20 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-white border border-[#001558]/15 flex items-center justify-center shrink-0">
+                      <CreditCard className="w-4 h-4 text-[#001558]" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-extrabold text-[#001558]">
+                        ¿Necesitas informar un comprobante de pago?
+                      </p>
+                      <p className="text-[11px] text-slate-600 leading-snug">
+                        Sube transferencias individuales o depósitos grupales con desglose directo.
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    href="/pagos"
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#001558] hover:bg-[#0b2370] text-white font-black text-xs whitespace-nowrap transition-colors shadow-xs shrink-0"
+                  >
+                    Portal de Pagos
+                    <ArrowRight className="w-3.5 h-3.5 text-[#FEB135]" />
+                  </Link>
+                </div>
+
+                <div className="bg-[#FFFBF0] border border-[#FEB135]/60 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <div className="w-9 h-9 rounded-xl bg-white border border-[#FEB135]/50 flex items-center justify-center shrink-0">
                       <Heart className="w-4 h-4 text-red-600" />
@@ -318,7 +342,7 @@ export default function LoginPage() {
                   </div>
                   <Link
                     href="/ficha-medica"
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] font-black text-xs whitespace-nowrap transition-colors shadow-xs shrink-0"
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] font-black text-xs whitespace-nowrap transition-colors shadow-xs shrink-0"
                   >
                     Portal de Ficha Médica Oficial
                     <ArrowRight className="w-3.5 h-3.5" />

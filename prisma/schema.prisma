@@ -43,6 +43,7 @@ model Event {
   emailAccounts EmailAccount[]
   emailMessages EmailMessage[]
   incidents     Incident[]
+  receipts      PaymentReceipt[]
 }
 
 model EventMembership {
@@ -333,6 +334,19 @@ model Payment {
 
   @@index([participantId])
   @@index([transactionReference])
+}
+
+model PaymentReceipt {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  fileName  String
+  mimeType  String
+  sizeBytes Int
+  content   Bytes
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
 }
 
 // -------------------------------------------------------------

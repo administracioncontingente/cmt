@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser, resolveAuthorizedEventId, getEventPermissions } from '@/lib/auth';
-import { apiErrorResponse, parseOptionalDate } from '@/lib/apiUtils';
+import { apiErrorResponse, parseOptionalDate, parseOptionalFloat } from '@/lib/apiUtils';
 import { cleanRut } from '@/lib/rut';
+import {
+  PaymentValidationError,
+  recordDirectPayments,
+} from '@/lib/paymentService';
+import type { GroupAllocationInputDTO } from '@/types/domain';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -43,6 +48,7 @@ export async function GET(req: NextRequest) {
           totalAmount: 0,
           totalCount: 0,
           filloutCount: 0,
+          portalCount: 0,
           withReceiptCount: 0,
           last30DaysAmount: 0,
           sourceCounts: {},
@@ -175,6 +181,7 @@ export async function GET(req: NextRequest) {
     const thirtyDaysAgoMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
     let totalAmountRaw = 0;
     let filloutCount = 0;
+    let portalCount = 0;
     let withReceiptCount = 0;
     let last30DaysAmountRaw = 0;
     const sourceCounts: Record<string, number> = {};
@@ -185,6 +192,9 @@ export async function GET(req: NextRequest) {
       sourceCounts[src] = (sourceCounts[src] || 0) + 1;
       if (src === 'FILLOUT_MAIN' || src === 'FILLOUT_SUBFORM') {
         filloutCount++;
+      }
+      if (src === 'PORTAL_FORM' || src === 'PORTAL_GROUP_FORM') {
+        portalCount++;
       }
       if (p.receiptUrl && p.receiptUrl.trim() !== '') {
         withReceiptCount++;
@@ -206,6 +216,7 @@ export async function GET(req: NextRequest) {
         totalAmount: round2(totalAmountRaw),
         totalCount: allEventPayments.length,
         filloutCount,
+        portalCount,
         withReceiptCount,
         last30DaysAmount: round2(last30DaysAmountRaw),
         sourceCounts,
@@ -214,5 +225,159 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: unknown) {
     return apiErrorResponse(error, 'Error al obtener el historial de pagos', 500);
+  }
+}
+
+function readFormStr(fd: FormData, key: string): string {
+  const val = fd.get(key);
+  return typeof val === 'string' ? val.trim() : '';
+}
+
+function readFormFile(fd: FormData, key: string): File | null {
+  const val = fd.get(key);
+  if (val && typeof val === 'object' && 'arrayBuffer' in val && 'size' in val) {
+    const f = val as File;
+    return f.size > 0 ? f : null;
+  }
+  return null;
+}
+
+export async function POST(req: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
+
+  try {
+    const contentType = req.headers.get('content-type') || '';
+
+    let requestedEventId: string | null = null;
+    let modeRaw = 'INDIVIDUAL';
+    let participantId: string | null = null;
+    let payerRut: string | null = null;
+    let amount: number | null = null;
+    let paymentDateRaw: unknown = null;
+    let paymentMethod: string | null = null;
+    let transactionReference: string | null = null;
+    let receiptUrl: string | null = null;
+    let receiptFile: File | null = null;
+    let branch: string | null = null;
+    let comments: string | null = null;
+    let allocations: GroupAllocationInputDTO[] | undefined;
+
+    if (contentType.includes('multipart/form-data')) {
+      const fd = await req.formData();
+      requestedEventId = readFormStr(fd, 'eventId') || null;
+      modeRaw = readFormStr(fd, 'mode') || 'INDIVIDUAL';
+      participantId = readFormStr(fd, 'participantId') || null;
+      payerRut = readFormStr(fd, 'payerRut') || null;
+      amount = parseOptionalFloat(readFormStr(fd, 'amount'));
+      paymentDateRaw = readFormStr(fd, 'paymentDate');
+      paymentMethod = readFormStr(fd, 'paymentMethod') || null;
+      transactionReference = readFormStr(fd, 'transactionReference') || null;
+      receiptUrl = readFormStr(fd, 'receiptUrl') || null;
+      receiptFile = readFormFile(fd, 'receiptFile');
+      branch = readFormStr(fd, 'branch') || null;
+      comments = readFormStr(fd, 'comments') || null;
+      const allocRaw = readFormStr(fd, 'allocations');
+      if (allocRaw) {
+        try {
+          const parsed = JSON.parse(allocRaw) as unknown;
+          if (!Array.isArray(parsed)) throw new Error('Not array');
+          allocations = parsed as GroupAllocationInputDTO[];
+        } catch {
+          return NextResponse.json(
+            { error: 'El desglose de participantes tiene un formato inválido' },
+            { status: 400 }
+          );
+        }
+      }
+    } else {
+      const body = (await req.json()) as Record<string, unknown>;
+      requestedEventId = typeof body.eventId === 'string' ? body.eventId : null;
+      modeRaw = typeof body.mode === 'string' ? body.mode : 'INDIVIDUAL';
+      participantId = typeof body.participantId === 'string' ? body.participantId : null;
+      payerRut = typeof body.payerRut === 'string' ? body.payerRut : null;
+      amount = parseOptionalFloat(body.amount);
+      paymentDateRaw = body.paymentDate;
+      paymentMethod = typeof body.paymentMethod === 'string' ? body.paymentMethod : null;
+      transactionReference =
+        typeof body.transactionReference === 'string' ? body.transactionReference : null;
+      receiptUrl = typeof body.receiptUrl === 'string' ? body.receiptUrl : null;
+      branch = typeof body.branch === 'string' ? body.branch : null;
+      comments = typeof body.comments === 'string' ? body.comments : null;
+      if (Array.isArray(body.allocations)) {
+        allocations = body.allocations as GroupAllocationInputDTO[];
+      }
+    }
+
+    const { eventId: activeEventId, forbidden } = await resolveAuthorizedEventId(
+      user,
+      requestedEventId
+    );
+
+    if (forbidden) {
+      return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
+    }
+
+    if (!activeEventId) {
+      return NextResponse.json(
+        { error: 'Se requiere un evento activo para registrar pagos' },
+        { status: 400 }
+      );
+    }
+
+    const permissions = getEventPermissions(user, activeEventId);
+    if (!permissions.canManageFinance) {
+      return NextResponse.json(
+        { error: 'No tienes permisos financieros en este evento' },
+        { status: 403 }
+      );
+    }
+
+    const mode = modeRaw === 'GROUP_SPLIT' ? 'GROUP_SPLIT' : 'INDIVIDUAL';
+    if (amount === null || amount <= 0) {
+      return NextResponse.json(
+        { error: 'El monto del pago debe ser mayor a 0' },
+        { status: 400 }
+      );
+    }
+
+    const paymentDate = parseOptionalDate(paymentDateRaw) ?? new Date();
+
+    const result = await recordDirectPayments({
+      eventId: activeEventId,
+      mode,
+      participantId,
+      payerRut,
+      amount,
+      paymentDate,
+      paymentMethod,
+      transactionReference,
+      receiptFile,
+      receiptUrl,
+      branch,
+      comments,
+      source: mode === 'GROUP_SPLIT' ? 'MANUAL_GROUP' : 'MANUAL',
+      registeredById: user.id,
+      allocations,
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        mode,
+        ...result,
+      },
+      { status: 201 }
+    );
+  } catch (error: unknown) {
+    if (error instanceof PaymentValidationError) {
+      return NextResponse.json(
+        { error: error.message, details: error.details },
+        { status: error.statusCode }
+      );
+    }
+    return apiErrorResponse(error, 'Error al registrar el pago en tesorería', 500);
   }
 }

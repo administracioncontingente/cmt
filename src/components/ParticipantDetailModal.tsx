@@ -55,6 +55,21 @@ function getPaymentSourceMeta(source?: string | null): {
   className: string;
 } {
   switch (source) {
+    case 'PORTAL_FORM':
+      return {
+        label: 'Formulario Web',
+        className: 'bg-[#FFF8E1] text-[#001558] border-[#FEB135]',
+      };
+    case 'PORTAL_GROUP_FORM':
+      return {
+        label: 'Formulario Grupal',
+        className: 'bg-sky-50 text-sky-900 border-sky-200',
+      };
+    case 'MANUAL_GROUP':
+      return {
+        label: 'Manual Grupal',
+        className: 'bg-purple-50 text-purple-800 border-purple-200',
+      };
     case 'FILLOUT_MAIN':
       return {
         label: 'Fillout Principal',
