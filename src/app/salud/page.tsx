@@ -793,6 +793,7 @@ function SaludWorkspace() {
           participantId={selectedParticipantId}
           currency={currency}
           permissions={permissions}
+          initialTab="medical"
           onClose={() => setSelectedParticipantId(null)}
           onParticipantUpdated={handleReload}
         />

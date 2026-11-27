@@ -1033,6 +1033,7 @@ function FinanzasWorkspace() {
           participantId={selectedParticipantId}
           currency={effectiveCurrency}
           permissions={permissions}
+          initialTab="finance"
           onClose={() => setSelectedParticipantId(null)}
           onParticipantUpdated={handleReload}
         />

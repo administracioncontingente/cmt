@@ -263,8 +263,13 @@ function DashboardContent() {
           participantId={selectedParticipantId}
           currency={currency}
           permissions={permissions}
+          initialTab="finance"
           onClose={() => setSelectedParticipantId(null)}
           onParticipantUpdated={handleRefreshAll}
+          onEditParticipant={(p) => {
+            setSelectedParticipantId(null);
+            setEditingParticipant(p);
+          }}
         />
       )}
 
