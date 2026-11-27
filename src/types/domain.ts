@@ -2,6 +2,7 @@ import type { FinancialSummary } from '@/lib/finance';
 
 export type EventRole = 'EVENT_ADMIN' | 'TREASURER' | 'COORDINATOR' | 'MEDICAL_STAFF' | 'VIEWER';
 export type GlobalRole = 'SUPER_ADMIN' | 'ADMIN' | 'USER';
+export type DetailTab = 'finance' | 'profile' | 'logistics' | 'medical' | 'communications' | 'incidents';
 
 export interface EventPermissions {
   isSuperAdmin: boolean;
@@ -98,6 +99,9 @@ export interface PaymentPlanDTO {
   currency: string;
   description?: string | null;
   installments?: InstallmentDTO[];
+  _count?: {
+    participants?: number;
+  };
   createdAt?: string | Date;
   updatedAt?: string | Date;
 }
@@ -400,4 +404,36 @@ export interface ImportResultDTO {
   updatedCount: number;
   errorsCount: number;
   errors: ImportErrorRow[];
+}
+
+export interface PaymentLedgerItemDTO extends PaymentDTO {
+  participant: ParticipantReferenceDTO;
+}
+
+export interface PaymentsLedgerSummaryDTO {
+  totalAmount: number;
+  totalCount: number;
+  filloutCount: number;
+  withReceiptCount: number;
+  last30DaysAmount: number;
+  sourceCounts: Record<string, number>;
+}
+
+export interface PaymentsLedgerResponseDTO {
+  payments: PaymentLedgerItemDTO[];
+  totalCount: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  summary: PaymentsLedgerSummaryDTO;
+  currency: string;
+}
+
+export interface ParticipantsListResponseDTO {
+  participants: ParticipantDTO[];
+  count: number;
+  totalCount: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }

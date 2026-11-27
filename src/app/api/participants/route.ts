@@ -11,6 +11,47 @@ import { formatRut, cleanRut } from '@/lib/rut';
 import { buildRoleWhereClause, normalizeRoleKey } from '@/lib/roles';
 import { apiErrorResponse, parseOptionalDate, parseOptionalFloat } from '@/lib/apiUtils';
 
+type ParticipantSortField = 'name' | 'paid' | 'remaining' | 'role';
+type SortDirection = 'asc' | 'desc';
+
+function parseSortField(raw: string | null): ParticipantSortField {
+  if (raw === 'paid' || raw === 'remaining' || raw === 'role' || raw === 'name') {
+    return raw;
+  }
+  return 'name';
+}
+
+function parseSortDirection(raw: string | null): SortDirection {
+  return raw === 'desc' ? 'desc' : 'asc';
+}
+
+function matchesMedicalFilter(
+  medicalRecord: {
+    completionStatus?: string | null;
+    hasSevereAllergies?: boolean | null;
+    carriesEpiPen?: boolean | null;
+    requiresColdChainMedication?: boolean | null;
+  } | null,
+  medicalFilter: string
+): boolean {
+  if (!medicalFilter || medicalFilter === 'ALL') return true;
+  const status = medicalRecord?.completionStatus;
+  switch (medicalFilter) {
+    case 'COMPLETED':
+      return status === 'COMPLETED' || status === 'VERIFIED';
+    case 'PENDING':
+      return status !== 'COMPLETED' && status !== 'VERIFIED';
+    case 'SEVERE_ALLERGY':
+      return Boolean(medicalRecord?.hasSevereAllergies);
+    case 'EPIPEN':
+      return Boolean(medicalRecord?.carriesEpiPen);
+    case 'COLD_CHAIN':
+      return Boolean(medicalRecord?.requiresColdChainMedication);
+    default:
+      return true;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -26,8 +67,25 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'No tienes acceso a este evento' }, { status: 403 });
     }
 
+    const rawLimit = searchParams.get('limit');
+    const rawPage = searchParams.get('page');
+    const defaultLimit = rawPage !== null ? 50 : 500;
+    const parsedLimit = rawLimit !== null ? Number.parseInt(rawLimit, 10) : defaultLimit;
+    const parsedPage = rawPage !== null ? Number.parseInt(rawPage, 10) : 1;
+    const limit = Number.isFinite(parsedLimit)
+      ? Math.min(1000, Math.max(1, parsedLimit))
+      : defaultLimit;
+    const page = Number.isFinite(parsedPage) ? Math.max(1, parsedPage) : 1;
+
     if (!activeEventId) {
-      return NextResponse.json({ participants: [], count: 0 });
+      return NextResponse.json({
+        participants: [],
+        count: 0,
+        totalCount: 0,
+        page,
+        limit,
+        totalPages: 1,
+      });
     }
 
     const permissions = getEventPermissions(user, activeEventId);
@@ -39,13 +97,9 @@ export async function GET(req: NextRequest) {
     const role = searchParams.get('role')?.trim() || '';
     const status = searchParams.get('status')?.trim() || '';
     const health = searchParams.get('health')?.trim() || '';
-
-    const rawLimit = searchParams.get('limit');
-    const rawPage = searchParams.get('page');
-    const parsedLimit = rawLimit !== null ? Number.parseInt(rawLimit, 10) : 500;
-    const parsedPage = rawPage !== null ? Number.parseInt(rawPage, 10) : 1;
-    const limit = Number.isFinite(parsedLimit) ? Math.min(1000, Math.max(1, parsedLimit)) : 500;
-    const page = Number.isFinite(parsedPage) ? Math.max(1, parsedPage) : 1;
+    const medical = searchParams.get('medical')?.trim().toUpperCase() || '';
+    const sortBy = parseSortField(searchParams.get('sortBy')?.trim() || null);
+    const sortDir = parseSortDirection(searchParams.get('sortDir')?.trim() || null);
 
     const where: Prisma.ParticipantWhereInput = { eventId: activeEventId };
 
@@ -87,8 +141,13 @@ export async function GET(req: NextRequest) {
           select: {
             completionStatus: true,
             hasSevereAllergies: true,
+            carriesEpiPen: true,
+            requiresColdChainMedication: true,
             bloodType: true,
             qrAccessCode: true,
+            emergencyContactName: true,
+            emergencyContactPhone: true,
+            declaredAt: true,
           },
         },
         plan: {
@@ -103,8 +162,6 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-      take: limit,
-      skip: (page - 1) * limit,
     });
 
     const enriched = participants.map((p) => {
@@ -121,14 +178,68 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // Filtro por salud financiera si aplica
-    const filtered = health && health !== 'ALL'
-      ? enriched.filter((p) => matchesHealthFilter(p, health))
-      : enriched;
+    // Filtros en memoria (salud financiera + ficha médica) antes de paginar
+    const healthFiltered =
+      health && health !== 'ALL'
+        ? enriched.filter((p) => matchesHealthFilter(p, health))
+        : enriched;
+
+    const medicalFiltered =
+      medical && medical !== 'ALL'
+        ? healthFiltered.filter((p) => matchesMedicalFilter(p.medicalRecord, medical))
+        : healthFiltered;
+
+    const getPaid = (p: (typeof enriched)[number]): number =>
+      p.financial?.totalPaid ?? p.totalPaidSheet ?? 0;
+
+    const getRemaining = (p: (typeof enriched)[number]): number => {
+      const totalAmount = resolveParticipantTargetAmount(p.targetFeeUSD, p.plan?.totalAmount);
+      return Math.max(0, totalAmount - getPaid(p));
+    };
+
+    const compareByName = (a: (typeof enriched)[number], b: (typeof enriched)[number]): number => {
+      const lastCmp = (a.lastName || '').localeCompare(b.lastName || '', 'es', {
+        sensitivity: 'base',
+      });
+      if (lastCmp !== 0) return lastCmp;
+      return (a.firstName || '').localeCompare(b.firstName || '', 'es', {
+        sensitivity: 'base',
+      });
+    };
+
+    const dir = sortDir === 'desc' ? -1 : 1;
+    const sorted = [...medicalFiltered].sort((a, b) => {
+      if (sortBy === 'paid') {
+        const diff = getPaid(a) - getPaid(b);
+        if (diff !== 0) return diff * dir;
+        return compareByName(a, b);
+      }
+      if (sortBy === 'remaining') {
+        const diff = getRemaining(a) - getRemaining(b);
+        if (diff !== 0) return diff * dir;
+        return compareByName(a, b);
+      }
+      if (sortBy === 'role') {
+        const roleCmp = (a.contingentRole || '').localeCompare(b.contingentRole || '', 'es', {
+          sensitivity: 'base',
+        });
+        if (roleCmp !== 0) return roleCmp * dir;
+        return compareByName(a, b);
+      }
+      return compareByName(a, b) * dir;
+    });
+
+    const totalCount = sorted.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / limit));
+    const paged = sorted.slice((page - 1) * limit, page * limit);
 
     return NextResponse.json({
-      participants: filtered,
-      count: filtered.length,
+      participants: paged,
+      count: paged.length,
+      totalCount,
+      page,
+      limit,
+      totalPages,
     });
   } catch (error: unknown) {
     return apiErrorResponse(error, 'Error al obtener la lista de participantes', 500);
