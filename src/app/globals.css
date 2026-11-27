@@ -37,3 +37,21 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #001558;
 }
+
+/* Clean institutional focus ring on interactive controls */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #001558;
+  outline-offset: 2px;
+}
+
+/* Basic print utility */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
