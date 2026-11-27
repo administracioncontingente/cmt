@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser, getEventPermissions } from '@/lib/auth';
+import { getParticipantSession } from '@/lib/participantAuth';
 import { apiErrorResponse } from '@/lib/apiUtils';
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getCurrentUser();
-  if (!user) {
+  const [adminUser, participantSession] = await Promise.all([
+    getCurrentUser(),
+    getParticipantSession(),
+  ]);
+
+  if (!adminUser && !participantSession) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
@@ -34,8 +39,23 @@ export async function GET(
       );
     }
 
-    const permissions = getEventPermissions(user, receipt.eventId);
-    if (!permissions.canView) {
+    const hasAdminAccess = Boolean(
+      adminUser && getEventPermissions(adminUser, receipt.eventId).canView
+    );
+
+    let hasParticipantAccess = false;
+    if (!hasAdminAccess && participantSession) {
+      const payment = await prisma.payment.findFirst({
+        where: {
+          participantId: participantSession.participantId,
+          receiptUrl: `/api/receipts/${id}`,
+        },
+        select: { id: true },
+      });
+      hasParticipantAccess = Boolean(payment);
+    }
+
+    if (!hasAdminAccess && !hasParticipantAccess) {
       return NextResponse.json(
         { error: 'No tienes permisos para ver este comprobante' },
         { status: 403 }
