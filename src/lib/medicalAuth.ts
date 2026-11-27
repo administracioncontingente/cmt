@@ -177,11 +177,11 @@ async function dispatchVerificationEmail(params: { toEmail: string; code: string
   // En consola se deja constancia visible y formato oficial de correo para desarrollo y auditoría:
   const logMessage = `
 ======================================================
-📧 [AGSCH WSJ 2027] CÓDIGO DE VERIFICACIÓN MÉDICA
+📧 [AGSCH] CÓDIGO DE VERIFICACIÓN MÉDICA
 Para: ${params.toEmail}
 Código de Validación: ${params.code}
 Válido por: 15 minutos
-Motivo: Acceso y firma de Ficha Médica Oficial Polonia 2027
+Motivo: Acceso y firma de Ficha Médica Oficial AGSCH
 ======================================================
   `;
   console.log(logMessage);

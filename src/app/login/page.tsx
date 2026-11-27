@@ -90,21 +90,21 @@ export default function LoginPage() {
                   />
                 </div>
                 <span className="px-2.5 py-1 rounded-full bg-[#FEB135] text-[#001558] text-[10px] font-black uppercase tracking-wider shrink-0">
-                  Polonia 2027
+                  Multievento
                 </span>
               </div>
 
               <div className="space-y-2.5 pt-2 border-t border-white/15">
                 <p className="text-[11px] font-bold uppercase tracking-widest text-[#FEB135]">
-                  Contingente Nacional AGSCH
+                  Asociación de Guías y Scouts de Chile
                 </p>
                 <h2 className="text-xl sm:text-2xl font-black leading-tight text-white">
-                  26° World Scout Jamboree
+                  Gestión de Eventos y Contingentes
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
-                  Plataforma oficial de gestión del Contingente Nacional para la
-                  coordinación de participantes, control de cuotas e
-                  información médica internacional.
+                  Plataforma oficial multievento para la coordinación de
+                  contingentes nacionales e internacionales, control de cuotas,
+                  salud y comunicaciones.
                 </p>
               </div>
 
@@ -137,10 +137,11 @@ export default function LoginPage() {
                   </div>
                   <div>
                     <p className="font-bold text-white">
-                      Salud Trilingüe &amp; QR
+                      Salud Multilingüe &amp; QR
                     </p>
                     <p className="text-slate-300 text-[11px]">
-                      Fichas médicas oficiales en Español, Inglés y Polaco.
+                      Fichas médicas oficiales multilingües con código QR de
+                      emergencia.
                     </p>
                   </div>
                 </li>
@@ -149,7 +150,7 @@ export default function LoginPage() {
 
             <div className="mt-8 pt-4 border-t border-white/15 flex items-center justify-between text-[11px] text-slate-300">
               <span>Identidad Oficial Kit Digital</span>
-              <span className="font-bold text-[#FEB135]">AGSCH • WSJ 2027</span>
+              <span className="font-bold text-[#FEB135]">AGSCH • Eventos</span>
             </div>
           </aside>
 

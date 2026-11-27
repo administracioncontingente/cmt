@@ -462,7 +462,7 @@ export function StatsOverview({
           </div>
         </div>
 
-        {/* Right: Preparación Médica WSJ */}
+        {/* Right: Preparación Médica del Evento */}
         <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between gap-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -471,7 +471,7 @@ export function StatsOverview({
               </div>
               <div>
                 <h3 className="text-xs font-extrabold text-[#001558] uppercase tracking-wider">
-                  Preparación Médica WSJ
+                  Preparación Médica del Evento
                 </h3>
                 <p className="text-[11px] text-slate-500">
                   {medCompletadas} completadas / {medPendientes} pendientes ({medPercent}%)

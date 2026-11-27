@@ -89,7 +89,7 @@ function MedicalContent() {
     return (
       <div className="min-h-screen bg-[#F5F6F8] flex flex-col items-center justify-center p-4 text-center">
         <Loader2 className="w-10 h-10 text-[#001558] animate-spin mb-4" />
-        <h2 className="text-[#001558] font-bold text-lg">Loading WSJ 2027 Medical Profile...</h2>
+        <h2 className="text-[#001558] font-bold text-lg">Loading AGSCH Medical Profile...</h2>
         <p className="text-slate-500 text-xs mt-1">
           Ładowanie karty medycznej / Cargando ficha médica...
         </p>
@@ -118,15 +118,15 @@ function MedicalContent() {
 
   const t = {
     en: {
-      emergencyTitle: 'WSJ 2027 EMERGENCY MEDICAL PROFILE',
-      polandBadge: 'POLAND 2027',
-      subtitle: 'Chilean Contingent • 26th World Scout Jamboree Poland 2027',
+      emergencyTitle: 'EMERGENCY MEDICAL PROFILE',
+      eventBadge: 'AGSCH CHILE',
+      subtitle: 'Chilean Contingent • Asociación de Guías y Scouts de Chile',
       criticalAlert: 'CRITICAL MEDICAL ALERT / HIGH RISK',
       allergies: 'Allergies & Hypersensitivities',
       epipen: 'PATIENT CARRIES EPINEPHRINE AUTO-INJECTOR (EpiPen)',
       bloodType: 'Blood Type / Rh Group',
       rutPassport: 'RUT / Passport ID',
-      roleInWsj: 'Role in WSJ',
+      contingentRole: 'Contingent Role',
       genderBirth: 'Gender / Birth',
       notReported: 'N/R',
       notSpecified: 'N/A',
@@ -143,7 +143,7 @@ function MedicalContent() {
       travelInsurance: 'International Travel Insurance',
       defaultInsuranceCompany: 'Assistance / Travel Insurance Policy',
       policyNumber: 'Policy Number',
-      defaultPolicyNumber: 'Contingent Group Policy WSJ',
+      defaultPolicyNumber: 'AGSCH Contingent Group Policy',
       insuranceEmergencyLine: 'Insurance Emergency Line',
       chronicConditions: 'Chronic Medical Conditions',
       currentMedications: 'Current Daily Medications',
@@ -162,15 +162,15 @@ function MedicalContent() {
       qrCodeAlt: 'Emergency QR Code',
     },
     pl: {
-      emergencyTitle: 'KARTA MEDYCZNA RATUNKOWA WSJ 2027',
-      polandBadge: 'POLSKA 2027',
-      subtitle: 'Kontyngent Chile • 26. Światowe Jamboree Skautowe Polska 2027',
+      emergencyTitle: 'KARTA MEDYCZNA RATUNKOWA',
+      eventBadge: 'AGSCH CHILE',
+      subtitle: 'Kontyngent Chile • Asociación de Guías y Scouts de Chile',
       criticalAlert: 'KRYTYCZNE OSTRZEŻENIE MEDYCZNE / WYSOKIE RYZYKO',
       allergies: 'Alergie i Nadwrażliwości',
       epipen: 'PACJENT POSIADA AUTOWSTRZYKIWACZ Z ADRENALINĄ (EpiPen)',
       bloodType: 'Grupa Krwi / Czynnik Rh',
       rutPassport: 'RUT / Nr Paszportu',
-      roleInWsj: 'Rola na WSJ',
+      contingentRole: 'Rola w Kontyngencie',
       genderBirth: 'Płeć / Data ur.',
       notReported: 'B/D',
       notSpecified: 'B/D',
@@ -187,7 +187,7 @@ function MedicalContent() {
       travelInsurance: 'Międzynarodowe Ubezpieczenie Podróżne',
       defaultInsuranceCompany: 'Polisa Ubezpieczenia Podróżnego',
       policyNumber: 'Numer Polisy',
-      defaultPolicyNumber: 'Polisa Grupowa Kontyngentu WSJ',
+      defaultPolicyNumber: 'Polisa Grupowa Kontyngentu AGSCH',
       insuranceEmergencyLine: 'Linia Alarmowa Ubezpieczyciela',
       chronicConditions: 'Choroby Przewlekłe',
       currentMedications: 'Aktualnie Przyjmowane Leki',
@@ -197,7 +197,7 @@ function MedicalContent() {
       surgeries: 'Przebyte Operacje i Ciężkie Urazy',
       devices: 'Urządzenia Medyczne i Protezy',
       physicalLimits: 'Ograniczenia Aktywności Fizycznej i Wodnej',
-      consent: 'Zgoda na Ratunkowe Leczenie Medyczne w Polsce',
+      consent: 'Zgoda na Ratunkowe Leczenie Medyczne podczas Wydarzenia',
       print: 'Drukuj Kartę Medyczną',
       verified: 'Deklaracja medyczna podpisana przez opiekuna',
       guardianFallback: 'Opiekun',
@@ -206,15 +206,15 @@ function MedicalContent() {
       qrCodeAlt: 'Ratunkowy Kod QR',
     },
     es: {
-      emergencyTitle: 'FICHA MÉDICA DE EMERGENCIA WSJ 2027',
-      polandBadge: 'POLONIA 2027',
-      subtitle: 'Contingente Chileno • 26° Jamboree Scout Mundial Polonia 2027',
+      emergencyTitle: 'FICHA MÉDICA DE EMERGENCIA',
+      eventBadge: 'AGSCH CHILE',
+      subtitle: 'Contingente Nacional • Asociación de Guías y Scouts de Chile',
       criticalAlert: 'ALERTA MÉDICA CRÍTICA / ALTO RIESGO',
       allergies: 'Alergias e Hipersensibilidades',
       epipen: 'EL PARTICIPANTE PORTA AUTOINYECTOR DE EPINEFRINA (EpiPen)',
       bloodType: 'Grupo Sanguíneo / Factor Rh',
       rutPassport: 'RUT / Pasaporte',
-      roleInWsj: 'Rol en el WSJ',
+      contingentRole: 'Rol en el Contingente',
       genderBirth: 'Género / Nacimiento',
       notReported: 'N/R',
       notSpecified: 'N/A',
@@ -231,7 +231,7 @@ function MedicalContent() {
       travelInsurance: 'Seguro de Asistencia en Viaje',
       defaultInsuranceCompany: 'Seguro de Asistencia en Viaje',
       policyNumber: 'N° de Póliza',
-      defaultPolicyNumber: 'Póliza Grupal Contingente WSJ',
+      defaultPolicyNumber: 'Póliza Grupal Contingente AGSCH',
       insuranceEmergencyLine: 'Línea de Emergencia del Seguro',
       chronicConditions: 'Condiciones Médicas Crónicas',
       currentMedications: 'Medicamentos Habituales',
@@ -241,7 +241,7 @@ function MedicalContent() {
       surgeries: 'Cirugías y Traumatismos Previos',
       devices: 'Dispositivos Médicos e Implantes',
       physicalLimits: 'Limitaciones Físicas y Acuáticas',
-      consent: 'Consentimiento para Tratamiento de Emergencia en Polonia',
+      consent: 'Consentimiento para Tratamiento Médico de Emergencia en el Evento',
       print: 'Imprimir Ficha',
       verified: 'Declaración médica completada y firmada por apoderado',
       guardianFallback: 'Apoderado',
@@ -357,7 +357,7 @@ function MedicalContent() {
                   {t.emergencyTitle}
                 </span>
                 <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#FEB135] text-[#001558] uppercase">
-                  {t.polandBadge}
+                  {t.eventBadge}
                 </span>
               </div>
               <p className="text-xs text-slate-200">{t.subtitle}</p>
@@ -487,7 +487,7 @@ function MedicalContent() {
               </div>
               <div className="bg-[#F5F6F8] p-2.5 rounded-xl border border-slate-200">
                 <span className="text-slate-500 block text-[10px] uppercase font-bold">
-                  {t.roleInWsj}
+                  {t.contingentRole}
                 </span>
                 <span className="font-bold text-[#001558]">
                   {participant.contingentRole || t.notSpecified}

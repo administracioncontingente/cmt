@@ -15,9 +15,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Contingente AGSCH • Polonia 2027 | CRM de Gestión',
+  title: 'AGSCH • Plataforma de Gestión de Eventos y Contingentes',
   description:
-    'Plataforma oficial del Contingente de la Asociación de Guías y Scouts de Chile al 26° World Scout Jamboree Polonia 2027',
+    'Plataforma oficial multievento de la Asociación de Guías y Scouts de Chile para la gestión de contingentes, cuotas, salud y comunicaciones',
   icons: {
     icon: '/favicon.ico',
   },

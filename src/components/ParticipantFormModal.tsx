@@ -235,7 +235,7 @@ export function ParticipantFormModal({
                   : 'Inscribir Nuevo Participante'}
               </h2>
               <p className="text-xs text-slate-200">
-                {activeEvent?.shortName || activeEvent?.name || 'Polonia 2027'} •
+                {activeEvent?.shortName || activeEvent?.name || 'Sistema Multievento'} •
                 Asociación de Guías y Scouts de Chile
               </p>
             </div>

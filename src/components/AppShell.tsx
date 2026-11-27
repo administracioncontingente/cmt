@@ -190,7 +190,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span>
               Asociación de Guías y Scouts de Chile •{' '}
               {activeEvent?.name ||
-                'Contingente Nacional al 26° World Scout Jamboree Polonia 2027'}
+                'Plataforma Multievento de Gestión de Contingentes'}
             </span>
             <span className="text-[11px] text-slate-500">
               Diseño e Identidad Visual conforme a{' '}

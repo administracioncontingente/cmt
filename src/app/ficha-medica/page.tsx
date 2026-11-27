@@ -256,7 +256,7 @@ export default function FichaMedicaPage() {
       setEmergencyContactEmail(m.emergencyContactEmail || p.guardianEmail || '');
       setEmergencyContactRelation(m.emergencyContactRelation || p.guardianRelationship || 'Padre/Madre');
 
-      setInsuranceCompany(m.insuranceCompany || 'Seguro de Asistencia Internacional WSJ 2027');
+      setInsuranceCompany(m.insuranceCompany || 'Seguro de Asistencia en Viaje / Evento');
       setInsurancePolicyNumber(m.insurancePolicyNumber || '');
       setInsuranceEmergencyPhone(m.insuranceEmergencyPhone || '+56 2 2999 0000');
 
@@ -402,7 +402,7 @@ export default function FichaMedicaPage() {
               />
             </div>
             <div className="hidden sm:block pl-3 border-l border-slate-200">
-              <span className="font-black text-sm text-[#001558]">Polonia 2027</span>
+              <span className="font-black text-sm text-[#001558]">Portal de Salud AGSCH</span>
               <p className="text-[11px] text-slate-500">Ficha Médica Oficial del Contingente</p>
             </div>
           </div>
@@ -471,7 +471,7 @@ export default function FichaMedicaPage() {
               <div className="w-14 h-14 rounded-2xl bg-[#FFFBF0] border border-[#FEB135]/50 text-[#001558] flex items-center justify-center mx-auto shadow-xs">
                 <Heart className="w-7 h-7 text-red-600" />
               </div>
-              <h1 className="text-xl font-black text-[#001558]">Ficha Médica Polonia 2027</h1>
+              <h1 className="text-xl font-black text-[#001558]">Ficha Médica Oficial</h1>
               <p className="text-xs text-slate-600">
                 Acceso exclusivo para participantes y apoderados mediante código de seguridad enviado al correo.
               </p>
@@ -747,7 +747,7 @@ export default function FichaMedicaPage() {
                       QR de Emergencia
                     </span>
                     <p className="text-[10px] text-slate-500 max-w-[130px]">
-                      Acceso para paramédicos en Polonia (Inglés/Polaco)
+                      Acceso rápido multilingüe para equipos de emergencia
                     </p>
                     <a
                       href={qrEmergencyUrl || '#'}
@@ -786,7 +786,7 @@ export default function FichaMedicaPage() {
                       : 'text-slate-600 hover:text-[#001558]'
                   }`}
                 >
-                  🇬🇧 English (Medical Report WSJ)
+                  🇬🇧 English (Medical Report)
                 </button>
                 <button
                   type="button"
@@ -821,8 +821,8 @@ export default function FichaMedicaPage() {
                     <Globe className="w-4 h-4 text-[#FEB135]" />
                     <span>
                       {activeLangTab === 'en'
-                        ? 'OFFICIAL WSJ 2027 ENGLISH MEDICAL REPORT'
-                        : 'OFICJALNA KARTA MEDYCZNA WSJ 2027 W JĘZYKU POLSKIM'}
+                        ? 'OFFICIAL AGSCH ENGLISH MEDICAL REPORT'
+                        : 'OFICJALNA KARTA MEDYCZNA AGSCH W JĘZYKU POLSKIM'}
                     </span>
                   </div>
                   <span className="text-[11px] text-slate-500">
@@ -1065,7 +1065,7 @@ export default function FichaMedicaPage() {
                       </label>
                       <input
                         type="text"
-                        placeholder="Seguro de Asistencia Internacional WSJ 2027"
+                        placeholder="Seguro de Asistencia en Viaje / Evento"
                         value={insuranceCompany}
                         onChange={(e) => setInsuranceCompany(e.target.value)}
                         className={inputClassName}
@@ -1077,7 +1077,7 @@ export default function FichaMedicaPage() {
                       </label>
                       <input
                         type="text"
-                        placeholder="Póliza Grupal Contingente WSJ"
+                        placeholder="Póliza Grupal Contingente AGSCH"
                         value={insurancePolicyNumber}
                         onChange={(e) => setInsurancePolicyNumber(e.target.value)}
                         className={`${inputClassName} font-mono`}
@@ -1180,7 +1180,7 @@ export default function FichaMedicaPage() {
                       className="w-full bg-white border border-slate-300 text-slate-800 placeholder-slate-400 focus:border-[#001558] focus:ring-2 focus:ring-[#FEB135]/50 focus:outline-none rounded-xl p-3"
                     />
                     <span className="text-[10px] text-slate-500 block">
-                      Indica cualquier condición que requiera seguimiento o atención por el equipo de salud del WSJ.
+                      Indica cualquier condición que requiera seguimiento o atención por el equipo de salud del evento.
                     </span>
                   </div>
                 </div>
@@ -1351,12 +1351,12 @@ export default function FichaMedicaPage() {
                 >
                   <div className="flex items-center gap-2 font-black text-sm uppercase tracking-wider">
                     <Shield className="w-5 h-5 text-[#FEB135]" />
-                    <span>10. Declaración y Autorización de Tratamiento Médico de Emergencia en Polonia</span>
+                    <span>10. Declaración y Autorización de Tratamiento Médico de Emergencia</span>
                   </div>
 
                   <p className="text-xs text-slate-700 leading-relaxed">
                     Autorizo expresamente al equipo médico del Contingente Nacional de la Asociación de Guías y Scouts de Chile,
-                    al personal de salud de la Organización del 26° Jamboree Scout Mundial y a los centros hospitalarios de la República de Polonia
+                    al personal de salud de la organización del evento y a los centros asistenciales correspondientes
                     a suministrar primeros auxilios, medicamentos de urgencia, traslados en ambulancia o intervenciones quirúrgicas de emergencia
                     en caso de ser estrictamente necesario para la preservación de la vida o salud del participante.
                   </p>

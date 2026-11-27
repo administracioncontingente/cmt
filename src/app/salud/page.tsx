@@ -185,7 +185,7 @@ function SaludWorkspace() {
         typeof window !== 'undefined' ? window.location.origin : '';
       const path = `/ficha-medica/${encodeURIComponent(participant.rut)}`;
       const fullUrl = `${origin}${path}`;
-      const eventLabel = activeEvent?.name || '26° World Scout Jamboree Polonia 2027';
+      const eventLabel = activeEvent?.name || 'el evento oficial AGSCH';
       const whatsappMessage = `Hola, te enviamos el enlace directo para completar la Ficha Médica Oficial (${eventLabel}) de ${participant.firstName} ${participant.lastName} (RUT ${participant.rut}): ${fullUrl}`;
 
       try {
@@ -232,7 +232,7 @@ function SaludWorkspace() {
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-black text-[#001558] tracking-tight">
-                Panel Clínico y Preparación Médica WSJ
+                Panel Clínico y Preparación Médica
               </h1>
               <p className="text-xs sm:text-sm text-slate-600">
                 {activeEvent

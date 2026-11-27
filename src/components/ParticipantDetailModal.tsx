@@ -485,7 +485,7 @@ export function ParticipantDetailModal({
             }`}
           >
             <Heart className="w-4 h-4 text-red-600" />
-            Ficha Médica WSJ
+            Ficha Médica
             {data.medicalRecord?.completionStatus === 'COMPLETED' ? (
               <span className="w-2 h-2 rounded-full bg-emerald-500" title="Ficha completada" />
             ) : (
@@ -1110,7 +1110,7 @@ export function ParticipantDetailModal({
               <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
                 <h3 className="text-xs font-bold text-[#001558] uppercase tracking-wider mb-3 pb-2 border-b border-slate-200 flex items-center gap-2">
                   <Tent className="w-4 h-4 text-[#FEB135]" />
-                  Asignación en Contingente Polonia 2027
+                  Asignación en el Contingente
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
@@ -1144,7 +1144,7 @@ export function ParticipantDetailModal({
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[11px]">Registro Oficial en Polonia</span>
+                    <span className="text-slate-500 block text-[11px]">Registro Oficial del Evento</span>
                     <span className="text-slate-700 font-bold">
                       {data.polandRegistered || 'En proceso'}
                     </span>
@@ -1196,7 +1196,7 @@ export function ParticipantDetailModal({
             </div>
           )}
 
-          {/* TAB 4: FICHA MÉDICA WSJ 2027 */}
+          {/* TAB 4: FICHA MÉDICA OFICIAL */}
           {activeTab === 'medical' && (
             <div className="space-y-4 animate-in fade-in duration-200">
               {/* Banner de estado y acciones rápidas */}
@@ -1207,7 +1207,7 @@ export function ParticipantDetailModal({
                   </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-bold text-[#001558] text-sm">Ficha Médica Polonia 2027</h3>
+                      <h3 className="font-bold text-[#001558] text-sm">Ficha Médica Oficial</h3>
                       {data.medicalRecord?.completionStatus === 'COMPLETED' ? (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                           ✓ Completada y Traducida
@@ -1238,7 +1238,7 @@ export function ParticipantDetailModal({
                         typeof window !== 'undefined'
                           ? `${window.location.origin}/ficha-medica`
                           : '/ficha-medica';
-                      const text = `Hola, te enviamos el enlace para completar la Ficha Médica Oficial del Contingente Chileno para el 26° Jamboree Scout Mundial Polonia 2027 de ${data.firstName}. Ingresa con el RUT ${data.rut} aquí: ${url}`;
+                      const text = `Hola, te enviamos el enlace para completar la Ficha Médica Oficial del Contingente AGSCH de ${data.firstName}. Ingresa con el RUT ${data.rut} aquí: ${url}`;
                       try {
                         await navigator.clipboard.writeText(text);
                         setCopiedLink(true);
