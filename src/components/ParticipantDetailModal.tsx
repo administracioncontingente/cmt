@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useId } from 'react';
 import {
   X,
   CreditCard,
@@ -23,9 +23,16 @@ import {
   AlertTriangle,
   FileText,
   Ticket,
+  Pencil,
+  ChevronDown,
+  ChevronUp,
+  Layers,
 } from 'lucide-react';
 import { formatCurrency, FinancialSummary } from '@/lib/finance';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useToast } from '@/components/ui/ToastProvider';
 import type {
+  DetailTab,
   ParticipantDTO,
   PaymentDTO,
   EmailMessageDTO,
@@ -37,26 +44,77 @@ export interface ParticipantDetailModalProps {
   participantId: string;
   currency?: string;
   permissions?: EventPermissions | null;
+  initialTab?: DetailTab;
   onClose: () => void;
   onParticipantUpdated: () => void;
+  onEditParticipant?: (participant: ParticipantDTO) => void;
 }
 
-type DetailTab = 'finance' | 'profile' | 'logistics' | 'medical' | 'communications' | 'incidents';
+function getPaymentSourceMeta(source?: string | null): {
+  label: string;
+  className: string;
+} {
+  switch (source) {
+    case 'FILLOUT_MAIN':
+      return {
+        label: 'Fillout Principal',
+        className: 'bg-indigo-50 text-indigo-800 border-indigo-200',
+      };
+    case 'FILLOUT_SUBFORM':
+      return {
+        label: 'Fillout Grupal',
+        className: 'bg-purple-50 text-purple-800 border-purple-200',
+      };
+    case 'CSV_SHEET':
+      return {
+        label: 'Planilla / Sheet',
+        className: 'bg-sky-50 text-sky-800 border-sky-200',
+      };
+    case 'MANUAL':
+    default:
+      return {
+        label: 'Registro Manual',
+        className: 'bg-slate-100 text-slate-700 border-slate-200',
+      };
+  }
+}
+
+function getInstallmentStatusBadge(
+  status: 'PAGADA' | 'PARCIAL' | 'VENCIDA' | 'PENDIENTE'
+): string {
+  switch (status) {
+    case 'PAGADA':
+      return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+    case 'PARCIAL':
+      return 'bg-[#FFF8E1] text-[#001558] border-[#FEB135]';
+    case 'VENCIDA':
+      return 'bg-red-50 text-red-700 border-red-200';
+    case 'PENDIENTE':
+    default:
+      return 'bg-slate-100 text-slate-600 border-slate-200';
+  }
+}
 
 export function ParticipantDetailModal({
   participantId,
   currency = 'USD',
   permissions,
+  initialTab,
   onClose,
   onParticipantUpdated,
+  onEditParticipant,
 }: ParticipantDetailModalProps) {
-  const [activeTab, setActiveTab] = useState<DetailTab>('finance');
+  const { toast } = useToast();
+  const titleId = useId();
+
+  const [activeTab, setActiveTab] = useState<DetailTab>(initialTab ?? 'finance');
   const [medLang, setMedLang] = useState<'es' | 'en' | 'pl'>('es');
   const [copiedLink, setCopiedLink] = useState(false);
   const [data, setData] = useState<ParticipantDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCalendarPreview, setShowCalendarPreview] = useState(false);
+  const [showInstallments, setShowInstallments] = useState(true);
 
   // Form states for new payment
   const [submittingPayment, setSubmittingPayment] = useState(false);
@@ -67,8 +125,24 @@ export function ParticipantDetailModal({
   const [paymentNotes, setPaymentNotes] = useState('');
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
+  const [paymentToDeleteId, setPaymentToDeleteId] = useState<string | null>(null);
 
   const canManageFinance = !permissions || permissions.canManageFinance;
+  const isBusy = submittingPayment || deletingPaymentId !== null;
+  const isConfirmOpen = paymentToDeleteId !== null;
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isBusy && !isConfirmOpen) {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isBusy, isConfirmOpen, onClose]);
 
   const loadDetail = useCallback(async (id: string, signal?: AbortSignal) => {
     const res = await fetch(`/api/participants/${id}`, { signal });
@@ -146,22 +220,28 @@ export function ParticipantDetailModal({
       setPaymentNotes('');
       setData(resData.participant);
       onParticipantUpdated();
+      toast.success('Abono registrado correctamente');
     } catch (err: unknown) {
-      setPaymentError(err instanceof Error ? err.message : 'Error al procesar el abono');
+      const msg = err instanceof Error ? err.message : 'Error al procesar el abono';
+      setPaymentError(msg);
+      toast.error(msg);
     } finally {
       setSubmittingPayment(false);
     }
   };
 
-  const handleDeletePayment = async (paymentId: string) => {
-    if (!confirm('¿Estás seguro de anular este abono? El saldo se actualizará automáticamente.')) {
-      return;
-    }
+  const handleDeletePayment = (paymentId: string) => {
+    setPaymentToDeleteId(paymentId);
+  };
+
+  const confirmDeletePayment = async () => {
+    if (!paymentToDeleteId) return;
+    const targetId = paymentToDeleteId;
 
     try {
-      setDeletingPaymentId(paymentId);
+      setDeletingPaymentId(targetId);
       const res = await fetch(
-        `/api/participants/${participantId}/payments?paymentId=${paymentId}`,
+        `/api/participants/${participantId}/payments?paymentId=${targetId}`,
         { method: 'DELETE' }
       );
       const resData = (await res.json()) as { participant?: ParticipantDTO; error?: string };
@@ -169,9 +249,11 @@ export function ParticipantDetailModal({
         throw new Error(resData.error || 'Error al anular abono');
       }
       setData(resData.participant);
+      setPaymentToDeleteId(null);
       onParticipantUpdated();
+      toast.success('Abono anulado correctamente');
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Error al anular el abono');
+      toast.error(err instanceof Error ? err.message : 'Error al anular el abono');
     } finally {
       setDeletingPaymentId(null);
     }
@@ -179,8 +261,20 @@ export function ParticipantDetailModal({
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#001558]/40 backdrop-blur-xs p-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-[#001558]/40 backdrop-blur-xs p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            onClose();
+          }
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Cargando ficha del participante"
+          className="bg-white border border-slate-200 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl"
+        >
           <Loader2 className="w-8 h-8 text-[#001558] animate-spin mx-auto mb-3" />
           <p className="text-[#001558] text-sm font-bold">Cargando ficha oficial del participante...</p>
         </div>
@@ -190,13 +284,26 @@ export function ParticipantDetailModal({
 
   if (error || !data) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#001558]/40 backdrop-blur-xs p-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full text-center shadow-2xl space-y-4">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-[#001558]/40 backdrop-blur-xs p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            onClose();
+          }
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Error al cargar participante"
+          className="bg-white border border-slate-200 rounded-2xl p-6 max-w-md w-full text-center shadow-2xl space-y-4"
+        >
           <div className="w-11 h-11 rounded-xl bg-red-50 border border-red-200 text-red-600 flex items-center justify-center mx-auto">
             <AlertTriangle className="w-5 h-5" />
           </div>
           <p className="text-red-700 text-sm font-semibold">{error || 'No se encontró el participante'}</p>
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-2 bg-[#001558] hover:bg-[#0b2370] text-white rounded-xl text-xs font-bold cursor-pointer transition-colors"
           >
@@ -252,8 +359,20 @@ export function ParticipantDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#001558]/40 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#001558]/40 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isBusy && !isConfirmOpen) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+      >
         {/* Header */}
         <div className="px-6 py-4 bg-[#001558] border-b-4 border-b-[#FEB135] flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -263,7 +382,7 @@ export function ParticipantDetailModal({
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-black text-white tracking-tight truncate">
+                <h2 id={titleId} className="text-lg font-black text-white tracking-tight truncate">
                   {data.firstName} {data.lastName} {data.secondLastName || ''}
                 </h2>
                 {data.cupoCode && (
@@ -297,13 +416,26 @@ export function ParticipantDetailModal({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
-            aria-label="Cerrar modal"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {permissions?.canEditParticipants && onEditParticipant && (
+              <button
+                type="button"
+                onClick={() => onEditParticipant(data)}
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Pencil className="w-3.5 h-3.5 text-[#FEB135]" />
+                <span>Editar Ficha</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-xl text-slate-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              aria-label="Cerrar modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tab navigation (scrollable horizontally) */}
@@ -539,6 +671,96 @@ export function ParticipantDetailModal({
                 </div>
               )}
 
+              {/* Plan de Cuotas e Imputación */}
+              {fin.breakdown.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowInstallments((prev) => !prev)}
+                    className="w-full px-4 py-3 bg-[#F5F6F8] border-b border-slate-200 flex items-center justify-between gap-2 text-left cursor-pointer hover:bg-slate-100/70 transition-colors"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Layers className="w-4 h-4 text-[#FEB135]" />
+                      <h3 className="text-xs font-bold text-[#001558] uppercase tracking-wider">
+                        Plan de Cuotas e Imputación ({fin.breakdown.length})
+                      </h3>
+                      {fin.overdueCount > 0 && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+                          {fin.overdueCount} vencida{fin.overdueCount > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-slate-500 flex items-center gap-1 text-[11px] font-semibold">
+                      {showInstallments ? (
+                        <>
+                          Ocultar
+                          <ChevronUp className="w-4 h-4" />
+                        </>
+                      ) : (
+                        <>
+                          Ver detalle
+                          <ChevronDown className="w-4 h-4" />
+                        </>
+                      )}
+                    </span>
+                  </button>
+
+                  {showInstallments && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            <th className="py-2.5 px-3">Cuota</th>
+                            <th className="py-2.5 px-3">Vencimiento</th>
+                            <th className="py-2.5 px-3 text-right">Monto</th>
+                            <th className="py-2.5 px-3 text-right">Cubierto</th>
+                            <th className="py-2.5 px-3 text-right">Pendiente</th>
+                            <th className="py-2.5 px-3 text-center">Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-xs">
+                          {fin.breakdown.map((inst) => (
+                            <tr key={inst.id} className="hover:bg-[#FFFBF0]/40 transition-colors">
+                              <td className="py-2.5 px-3">
+                                <span className="font-mono font-bold text-[#001558] mr-1.5">
+                                  #{inst.installmentNumber}
+                                </span>
+                                <span className="font-semibold text-slate-800">{inst.title}</span>
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
+                                {new Date(inst.dueDate).toLocaleDateString('es-CL', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: '2-digit',
+                                })}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-700 whitespace-nowrap">
+                                {formatCurrency(inst.amount, currency)}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700 whitespace-nowrap">
+                                {formatCurrency(inst.coveredAmount, currency)}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-800 whitespace-nowrap">
+                                {formatCurrency(inst.remainingAmount, currency)}
+                              </td>
+                              <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                <span
+                                  className={`inline-block text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${getInstallmentStatusBadge(
+                                    inst.status
+                                  )}`}
+                                >
+                                  {inst.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Form to Register New Payment (hidden when !canManageFinance) */}
               {canManageFinance && (
                 <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
@@ -667,6 +889,7 @@ export function ParticipantDetailModal({
                   <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                     {data.payments.map((p: PaymentDTO) => {
                       const isNegative = p.amount < 0;
+                      const sourceMeta = getPaymentSourceMeta(p.source);
                       return (
                         <div
                           key={p.id}
@@ -694,6 +917,12 @@ export function ParticipantDetailModal({
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#EEF2FF] text-[#001558] font-semibold border border-[#001558]/20">
                                   {p.paymentMethod}
                                 </span>
+                                <span
+                                  className={`text-[10px] px-1.5 py-0.5 rounded font-semibold border ${sourceMeta.className}`}
+                                  title={`Origen: ${sourceMeta.label}`}
+                                >
+                                  {sourceMeta.label}
+                                </span>
                                 {p.transactionReference && (
                                   <span className="text-[10px] font-mono text-[#001558] bg-[#FFFBF0] px-1.5 py-0.5 rounded border border-[#FEB135]/40">
                                     Doc: {p.transactionReference}
@@ -720,12 +949,21 @@ export function ParticipantDetailModal({
                                     Ver Comprobante
                                   </a>
                                 )}
+                                {p.filloutSubmissionId && (
+                                  <span
+                                    title={`ID de envío Fillout: ${p.filloutSubmissionId}`}
+                                    className="text-[10px] font-mono text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200"
+                                  >
+                                    Fillout ID: {p.filloutSubmissionId.slice(0, 8)}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
 
                           {canManageFinance && (
                             <button
+                              type="button"
                               onClick={() => handleDeletePayment(p.id)}
                               disabled={deletingPaymentId === p.id}
                               title="Anular abono"
@@ -995,15 +1233,20 @@ export function ParticipantDetailModal({
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       const url =
                         typeof window !== 'undefined'
                           ? `${window.location.origin}/ficha-medica`
                           : '/ficha-medica';
                       const text = `Hola, te enviamos el enlace para completar la Ficha Médica Oficial del Contingente Chileno para el 26° Jamboree Scout Mundial Polonia 2027 de ${data.firstName}. Ingresa con el RUT ${data.rut} aquí: ${url}`;
-                      navigator.clipboard.writeText(text);
-                      setCopiedLink(true);
-                      setTimeout(() => setCopiedLink(false), 3000);
+                      try {
+                        await navigator.clipboard.writeText(text);
+                        setCopiedLink(true);
+                        toast.success('Enlace copiado para WhatsApp');
+                        setTimeout(() => setCopiedLink(false), 3000);
+                      } catch {
+                        toast.error('No se pudo copiar el enlace al portapapeles');
+                      }
                     }}
                     className="px-3 py-1.5 rounded-lg bg-[#FFFBF0] hover:bg-[#FFF8E1] text-[#001558] text-xs font-bold border border-[#FEB135] flex items-center gap-1.5 cursor-pointer transition-colors"
                   >
@@ -1329,6 +1572,7 @@ export function ParticipantDetailModal({
         {/* Footer */}
         <div className="px-6 py-3 border-t border-slate-200 flex justify-end bg-white">
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-2 bg-[#001558] hover:bg-[#0b2370] text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
           >
@@ -1336,6 +1580,18 @@ export function ParticipantDetailModal({
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={paymentToDeleteId !== null}
+        title="Anular abono registrado"
+        description="¿Estás seguro de anular este abono? El saldo y el estado financiero del participante se actualizarán automáticamente."
+        confirmLabel="Sí, anular abono"
+        cancelLabel="Cancelar"
+        variant="danger"
+        loading={deletingPaymentId !== null}
+        onCancel={() => setPaymentToDeleteId(null)}
+        onConfirm={confirmDeletePayment}
+      />
     </div>
   );
 }

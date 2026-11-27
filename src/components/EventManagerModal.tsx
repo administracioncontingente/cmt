@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useId } from 'react';
 import {
   X,
   Users,
@@ -11,9 +11,11 @@ import {
   Loader2,
   UserCheck,
 } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useToast } from '@/components/ui/ToastProvider';
 import type { EventSummary, TeamMemberDTO, UserSessionDTO } from '@/types/domain';
 
-interface EventManagerModalProps {
+export interface EventManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
   activeEvent: EventSummary | null;
@@ -31,10 +33,18 @@ export function EventManagerModal({
   currentUser,
   onEventCreated,
 }: EventManagerModalProps) {
+  const { toast } = useToast();
+  const titleId = useId();
+
   const [activeTab, setActiveTab] = useState<'team' | 'newEvent'>('team');
   const [loading, setLoading] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMemberDTO[]>([]);
   const [canManageTeam, setCanManageTeam] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<{
+    userId: string;
+    userName: string;
+  } | null>(null);
+  const [removingMember, setRemovingMember] = useState(false);
 
   // Form para nuevo miembro
   const [newMemberEmail, setNewMemberEmail] = useState('');
@@ -105,10 +115,31 @@ export function EventManagerModal({
     };
   }, [isOpen, activeEvent, isSuperAdmin]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setMessage(null);
+    setMemberToRemove(null);
     onClose();
-  };
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key === 'Escape' &&
+        !loading &&
+        !removingMember &&
+        !memberToRemove
+      ) {
+        handleClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, loading, removingMember, memberToRemove, handleClose]);
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,40 +163,43 @@ export function EventManagerModal({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al asignar miembro');
 
+      const successText = `Usuario ${newMemberEmail} asignado exitosamente como ${newMemberRole}.`;
       setMessage({
         type: 'success',
-        text: `Usuario ${newMemberEmail} asignado exitosamente como ${newMemberRole}.`,
+        text: successText,
       });
+      toast.success(successText);
       setNewMemberEmail('');
       setNewMemberName('');
       setNewMemberTitle('');
       setNewMemberPassword('');
       await loadTeam();
     } catch (err: unknown) {
+      const errorText =
+        err instanceof Error ? err.message : 'Error al asignar miembro';
       setMessage({
         type: 'error',
-        text: err instanceof Error ? err.message : 'Error al asignar miembro',
+        text: errorText,
       });
+      toast.error(errorText);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRemoveMember = async (userId: string, userName: string) => {
+  const handleRemoveMember = (userId: string, userName: string) => {
     if (!activeEvent?.id) return;
-    if (
-      !confirm(
-        `¿Estás seguro de remover a ${userName} del equipo de este evento?`
-      )
-    ) {
-      return;
-    }
+    setMemberToRemove({ userId, userName });
+  };
+
+  const confirmRemoveMember = async () => {
+    if (!activeEvent?.id || !memberToRemove) return;
 
     setMessage(null);
-    setLoading(true);
+    setRemovingMember(true);
     try {
       const res = await fetch(
-        `/api/events/${activeEvent.id}/team?userId=${userId}`,
+        `/api/events/${activeEvent.id}/team?userId=${memberToRemove.userId}`,
         {
           method: 'DELETE',
         }
@@ -175,14 +209,19 @@ export function EventManagerModal({
         throw new Error(data.error || 'Error al remover miembro');
       }
       setMessage({ type: 'success', text: 'Miembro removido del evento.' });
+      toast.success('Miembro removido del evento.');
+      setMemberToRemove(null);
       await loadTeam();
     } catch (err: unknown) {
+      const errorText =
+        err instanceof Error ? err.message : 'Error al remover miembro';
       setMessage({
         type: 'error',
-        text: err instanceof Error ? err.message : 'Error al remover miembro',
+        text: errorText,
       });
+      toast.error(errorText);
     } finally {
-      setLoading(false);
+      setRemovingMember(false);
     }
   };
 
@@ -211,10 +250,12 @@ export function EventManagerModal({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al crear evento');
 
+      const successText = `¡Evento "${newName}" creado con éxito!`;
       setMessage({
         type: 'success',
-        text: `¡Evento "${newName}" creado con éxito!`,
+        text: successText,
       });
+      toast.success(successText);
       setNewCode('');
       setNewName('');
       setNewShortName('');
@@ -222,10 +263,13 @@ export function EventManagerModal({
       setNewCity('');
       if (onEventCreated) onEventCreated();
     } catch (err: unknown) {
+      const errorText =
+        err instanceof Error ? err.message : 'Error al crear evento';
       setMessage({
         type: 'error',
-        text: err instanceof Error ? err.message : 'Error al crear evento',
+        text: errorText,
       });
+      toast.error(errorText);
     } finally {
       setLoading(false);
     }
@@ -247,14 +291,31 @@ export function EventManagerModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#001558]/40 backdrop-blur-xs">
-      <div className="bg-white border border-slate-200 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#001558]/40 backdrop-blur-xs"
+      onClick={(e) => {
+        if (
+          e.target === e.currentTarget &&
+          !loading &&
+          !removingMember &&
+          !memberToRemove
+        ) {
+          handleClose();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white border border-slate-200 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
         {/* Header */}
         <div className="bg-[#001558] text-white px-6 py-4 border-b-4 border-b-[#FEB135] flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-2xl">{activeEvent?.flagEmoji || '🏕️'}</span>
             <div>
-              <h2 className="text-lg font-extrabold text-white">
+              <h2 id={titleId} className="text-lg font-extrabold text-white">
                 Gestión de Eventos y Permisos AGSCH
               </h2>
               <p className="text-xs text-slate-200">
@@ -268,6 +329,7 @@ export function EventManagerModal({
           <button
             type="button"
             onClick={handleClose}
+            aria-label="Cerrar modal"
             className="text-white/75 hover:text-white p-2 rounded-lg hover:bg-white/10 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -715,6 +777,18 @@ export function EventManagerModal({
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={memberToRemove !== null}
+        title="Remover miembro del equipo"
+        description={`¿Estás seguro de remover a ${memberToRemove?.userName || 'este usuario'} del equipo de este evento?`}
+        confirmLabel="Sí, remover"
+        cancelLabel="Cancelar"
+        variant="danger"
+        loading={removingMember}
+        onCancel={() => setMemberToRemove(null)}
+        onConfirm={confirmRemoveMember}
+      />
     </div>
   );
 }

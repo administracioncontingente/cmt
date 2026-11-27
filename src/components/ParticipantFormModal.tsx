@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, UserPlus, Save, Loader2, AlertCircle } from 'lucide-react';
+import React, { useEffect, useId, useState } from 'react';
+import { X, UserPlus, Save, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { formatRut, cleanRut, validateRut } from '@/lib/rut';
+import { useToast } from '@/components/ui/ToastProvider';
 import type { EventSummary, ParticipantDTO } from '@/types/domain';
 
-interface ParticipantFormModalProps {
+export interface ParticipantFormModalProps {
   initialData?: ParticipantDTO | null;
   activeEvent?: EventSummary | null;
   onClose: () => void;
@@ -21,9 +22,12 @@ export function ParticipantFormModal({
   onClose,
   onSuccess,
 }: ParticipantFormModalProps) {
+  const { toast } = useToast();
+  const titleId = useId();
   const isEditing = !!initialData;
 
   const [rut, setRut] = useState(initialData?.rut || '');
+  const [rutTouched, setRutTouched] = useState(false);
   const [firstName, setFirstName] = useState(initialData?.firstName || '');
   const [lastName, setLastName] = useState(initialData?.lastName || '');
   const [secondLastName, setSecondLastName] = useState(
@@ -41,6 +45,11 @@ export function ParticipantFormModal({
     initialData?.contingentRole || 'Participante'
   );
   const [status, setStatus] = useState(initialData?.status || 'CONFIRMADO');
+  const [targetFeeUSD, setTargetFeeUSD] = useState(
+    initialData?.targetFeeUSD !== null && initialData?.targetFeeUSD !== undefined
+      ? String(initialData.targetFeeUSD)
+      : ''
+  );
   const [scoutZone, setScoutZone] = useState(initialData?.scoutZone || '');
   const [scoutDistrict, setScoutDistrict] = useState(
     initialData?.scoutDistrict || ''
@@ -74,7 +83,26 @@ export function ParticipantFormModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !loading) {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [loading, onClose]);
+
+  const cleanedRut = cleanRut(rut);
+  const shouldShowRutFeedback =
+    cleanedRut.length >= 7 || (rutTouched && cleanedRut.length > 0);
+  const isRutValid = shouldShowRutFeedback ? validateRut(cleanedRut) : null;
+
   const handleRutBlur = () => {
+    setRutTouched(true);
     if (rut) {
       setRut(formatRut(rut));
     }
@@ -91,8 +119,22 @@ export function ParticipantFormModal({
 
     const cleaned = cleanRut(rut);
     if (!validateRut(cleaned)) {
+      setRutTouched(true);
       setError(
         'El RUT ingresado no es válido (verifique el dígito verificador)'
+      );
+      return;
+    }
+
+    const trimmedTargetFee = targetFeeUSD.trim();
+    const parsedTargetFee =
+      trimmedTargetFee === '' ? null : parseFloat(trimmedTargetFee);
+    if (
+      parsedTargetFee !== null &&
+      (Number.isNaN(parsedTargetFee) || parsedTargetFee < 0)
+    ) {
+      setError(
+        'La Cuota Objetivo Personalizada (USD) debe ser un monto válido mayor o igual a 0'
       );
       return;
     }
@@ -118,6 +160,7 @@ export function ParticipantFormModal({
         city,
         contingentRole,
         status,
+        targetFeeUSD: parsedTargetFee,
         scoutZone,
         scoutDistrict,
         scoutGroup,
@@ -145,17 +188,36 @@ export function ParticipantFormModal({
         throw new Error(data.error || 'Error al guardar participante');
       }
 
+      toast.success(
+        isEditing
+          ? 'Ficha del participante actualizada correctamente'
+          : 'Participante inscrito correctamente'
+      );
       onSuccess();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error inesperado');
+      const msg = err instanceof Error ? err.message : 'Error inesperado';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#001558]/40 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#001558]/40 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !loading) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+      >
         {/* Header */}
         <div className="px-6 py-4 bg-[#001558] text-white border-b-4 border-b-[#FEB135] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -167,7 +229,7 @@ export function ParticipantFormModal({
               )}
             </div>
             <div>
-              <h2 className="text-base font-extrabold text-white">
+              <h2 id={titleId} className="text-base font-extrabold text-white">
                 {isEditing
                   ? 'Editar Ficha Oficial'
                   : 'Inscribir Nuevo Participante'}
@@ -181,6 +243,7 @@ export function ParticipantFormModal({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Cerrar modal"
             className="p-2 rounded-xl text-white/75 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -216,8 +279,34 @@ export function ParticipantFormModal({
                   onChange={(e) => setRut(e.target.value)}
                   onBlur={handleRutBlur}
                   placeholder="12.345.678-5"
-                  className={`${INPUT_CLASS} font-mono`}
+                  aria-invalid={isRutValid === false}
+                  className={`${INPUT_CLASS} font-mono ${
+                    isRutValid === true
+                      ? 'border-emerald-400 focus:border-emerald-600'
+                      : isRutValid === false
+                        ? 'border-red-400 focus:border-red-600'
+                        : ''
+                  }`}
                 />
+                {isRutValid !== null && (
+                  <p
+                    className={`mt-1 text-[11px] font-semibold flex items-center gap-1 ${
+                      isRutValid ? 'text-emerald-700' : 'text-red-600'
+                    }`}
+                  >
+                    {isRutValid ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>RUT válido</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>Dígito verificador inválido</span>
+                      </>
+                    )}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -347,6 +436,24 @@ export function ParticipantFormModal({
                   <option value="PRE_INSCRITO">Preinscrito</option>
                   <option value="RETIRADO">Baja / Retirado</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 mb-1 font-semibold">
+                  Cuota Objetivo Personalizada (USD)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={targetFeeUSD}
+                  onChange={(e) => setTargetFeeUSD(e.target.value)}
+                  placeholder="Vacío = cuota del plan"
+                  className={`${INPUT_CLASS} font-mono`}
+                />
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Opcional. Ajusta por beca/modalidad o deja vacío.
+                </p>
               </div>
 
               <div>
