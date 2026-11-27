@@ -3,12 +3,30 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { ShieldCheck, Lock, Mail, ArrowRight, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import {
+  ShieldCheck,
+  Lock,
+  Mail,
+  ArrowRight,
+  Loader2,
+  Eye,
+  EyeOff,
+  Heart,
+  Users,
+  Globe,
+  AlertCircle,
+} from 'lucide-react';
+import { useToast } from '@/components/ui/ToastProvider';
+
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,152 +48,290 @@ export default function LoginPage() {
         throw new Error(data.error || 'Credenciales incorrectas');
       }
 
+      toast.success('Sesión iniciada correctamente', 'Bienvenido');
       router.push('/');
       router.refresh();
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : 'Error al iniciar sesión'
-      );
+      const message =
+        err instanceof Error ? err.message : 'Error al iniciar sesión';
+      setError(message);
+      toast.error(message, 'Acceso denegado');
     } finally {
       setLoading(false);
     }
   };
 
   const handleQuickFill = () => {
+    if (!isDevelopment) return;
     setEmail('admin@agsch.cl');
     setPassword('admin123');
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F6F8] flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
+    <div className="min-h-screen bg-[#F5F6F8] flex flex-col justify-center items-center px-4 py-8 sm:py-12 relative overflow-hidden">
       {/* Subtle institutional top bar accent */}
-      <div className="fixed top-0 inset-x-0 h-1.5 bg-[#001558]">
+      <div className="fixed top-0 inset-x-0 h-1.5 bg-[#001558] z-20">
         <div className="h-full w-1/3 bg-[#FEB135]" />
       </div>
 
-      <div className="w-full max-w-md relative z-10">
-        {/* Header Branding with Official Color Logo */}
-        <div className="text-center mb-7">
-          <div className="flex justify-center mb-4">
-            <div className="relative w-72 h-20">
-              <Image
-                src="/agsch-logo-color.svg"
-                alt="Asociación de Guías y Scouts de Chile"
-                fill
-                priority
-                className="object-contain"
-              />
-            </div>
-          </div>
-
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#FFFBF0] border border-[#FEB135] text-[#001558] text-xs font-bold mb-2.5 shadow-xs">
-            <span className="w-2 h-2 rounded-full bg-[#FEB135]" />
-            26° World Scout Jamboree • Polonia 2027
-          </div>
-          <h1 className="text-xl sm:text-2xl font-black text-[#001558] tracking-tight">
-            Portal del Contingente Nacional
-          </h1>
-          <p className="text-slate-600 text-xs mt-1 font-medium">
-            Sistema Oficial de Gestión y Control de Cuotas AGSCH
-          </p>
-        </div>
-
-        {/* Card */}
-        <div className="bg-white border border-slate-200 border-t-4 border-t-[#001558] rounded-2xl shadow-xl p-8 relative">
-          <div className="flex items-center gap-2 mb-6 pb-4 border-b border-slate-200 text-[#001558] text-xs font-bold uppercase tracking-wider">
-            <ShieldCheck className="w-4 h-4 text-[#FEB135]" />
-            Acceso Exclusivo Equipo Organizador
-          </div>
-
-          {error && (
-            <div className="mb-6 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
-              <span className="font-bold">Error:</span> {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Correo Electrónico
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <Mail className="w-4 h-4" />
+      <div className="w-full max-w-5xl relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+          {/* Columna Izquierda: Panel Informativo Institucional */}
+          <aside className="lg:col-span-5 bg-[#001558] text-white rounded-3xl border-t-4 border-t-[#FEB135] shadow-xl p-7 sm:p-8 flex flex-col justify-between relative overflow-hidden">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between gap-3">
+                <div className="relative w-44 h-12">
+                  <Image
+                    src="/agsch-logo-white.svg"
+                    alt="Asociación de Guías y Scouts de Chile"
+                    fill
+                    priority
+                    className="object-contain object-left"
+                  />
                 </div>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@agsch.cl"
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-800 placeholder-slate-400 focus:border-[#001558] focus:ring-2 focus:ring-[#FEB135]/50 focus:outline-none text-xs transition-all"
-                />
+                <span className="px-2.5 py-1 rounded-full bg-[#FEB135] text-[#001558] text-[10px] font-black uppercase tracking-wider shrink-0">
+                  Polonia 2027
+                </span>
               </div>
+
+              <div className="space-y-2.5 pt-2 border-t border-white/15">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-[#FEB135]">
+                  Contingente Nacional AGSCH
+                </p>
+                <h2 className="text-xl sm:text-2xl font-black leading-tight text-white">
+                  26° World Scout Jamboree
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
+                  Plataforma oficial de gestión del Contingente Nacional para la
+                  coordinación de participantes, control de cuotas e
+                  información médica internacional.
+                </p>
+              </div>
+
+              <ul className="space-y-3 pt-1 text-xs text-slate-100">
+                <li className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-white/10 border border-[#FEB135]/40 flex items-center justify-center shrink-0 mt-0.5">
+                    <Users className="w-3.5 h-3.5 text-[#FEB135]" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white">Nómina y Unidades</p>
+                    <p className="text-slate-300 text-[11px]">
+                      Seguimiento de cupos, patrullas, IST, Dirigentes y CMT.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-white/10 border border-[#FEB135]/40 flex items-center justify-center shrink-0 mt-0.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#FEB135]" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white">Control de Cuotas</p>
+                    <p className="text-slate-300 text-[11px]">
+                      Registro verificado de abonos, planes de pago y morosidad.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-white/10 border border-[#FEB135]/40 flex items-center justify-center shrink-0 mt-0.5">
+                    <Globe className="w-3.5 h-3.5 text-[#FEB135]" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white">
+                      Salud Trilingüe &amp; QR
+                    </p>
+                    <p className="text-slate-300 text-[11px]">
+                      Fichas médicas oficiales en Español, Inglés y Polaco.
+                    </p>
+                  </div>
+                </li>
+              </ul>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Contraseña
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <Lock className="w-4 h-4" />
+            <div className="mt-8 pt-4 border-t border-white/15 flex items-center justify-between text-[11px] text-slate-300">
+              <span>Identidad Oficial Kit Digital</span>
+              <span className="font-bold text-[#FEB135]">AGSCH • WSJ 2027</span>
+            </div>
+          </aside>
+
+          {/* Columna Derecha: Logo Oficial a Color + Tarjeta de Inicio de Sesión */}
+          <div className="lg:col-span-7 flex flex-col justify-between gap-4">
+            <div className="bg-white border border-slate-200 border-t-4 border-t-[#001558] rounded-3xl shadow-xl p-6 sm:p-8 flex-1 flex flex-col justify-center">
+              {/* Branding Oficial a Color */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-5 border-b border-slate-200">
+                <div className="relative w-52 h-14 shrink-0">
+                  <Image
+                    src="/agsch-logo-color.svg"
+                    alt="Asociación de Guías y Scouts de Chile"
+                    fill
+                    priority
+                    className="object-contain object-left"
+                  />
                 </div>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-800 placeholder-slate-400 focus:border-[#001558] focus:ring-2 focus:ring-[#FEB135]/50 focus:outline-none text-xs transition-all"
-                />
+                <div className="sm:text-right">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFFBF0] border border-[#FEB135] text-[#001558] text-[11px] font-bold">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#001558]" />
+                    Equipo Organizador
+                  </div>
+                  <h1 className="text-lg sm:text-xl font-black text-[#001558] tracking-tight mt-1.5">
+                    Portal de Administración
+                  </h1>
+                </div>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#001558] hover:bg-[#0b2370] text-white font-extrabold text-xs uppercase tracking-wider transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Verificando...
-                </>
-              ) : (
-                <>
-                  Ingresar al Sistema
-                  <ArrowRight className="w-4 h-4" />
-                </>
+              {error && (
+                <div
+                  role="alert"
+                  className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2.5"
+                >
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Error de acceso:</span> {error}
+                  </div>
+                </div>
               )}
-            </button>
-          </form>
 
-          {/* Quick Fill Box */}
-          <div className="mt-6 pt-4 border-t border-slate-200">
-            <div className="bg-[#FFFBF0] border border-[#FEB135]/40 border-l-4 border-l-[#FEB135] rounded-xl p-3 text-xs flex items-center justify-between text-[#001558]">
-              <div>
-                <span className="text-slate-600 font-medium">
-                  Credencial inicial:{' '}
-                </span>
-                <span className="text-[#001558] font-mono font-bold">
-                  admin@agsch.cl
-                </span>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="login-email"
+                    className="block text-xs font-bold text-[#001558] uppercase tracking-wider mb-1.5"
+                  >
+                    Correo Electrónico
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                      <Mail className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="login-email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="nombre@agsch.cl"
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-800 placeholder-slate-400 focus:border-[#001558] focus:ring-2 focus:ring-[#FEB135]/50 focus:outline-none text-sm transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="login-password"
+                    className="block text-xs font-bold text-[#001558] uppercase tracking-wider mb-1.5"
+                  >
+                    Contraseña
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="login-password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-10 pr-11 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-800 placeholder-slate-400 focus:border-[#001558] focus:ring-2 focus:ring-[#FEB135]/50 focus:outline-none text-sm transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      aria-label={
+                        showPassword
+                          ? 'Ocultar contraseña'
+                          : 'Mostrar contraseña'
+                      }
+                      aria-pressed={showPassword}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-[#001558] transition-colors cursor-pointer"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#001558] hover:bg-[#0b2370] text-white font-extrabold text-xs uppercase tracking-wider transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-2"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Verificando...
+                    </>
+                  ) : (
+                    <>
+                      Ingresar al Sistema
+                      <ArrowRight className="w-4 h-4 text-[#FEB135]" />
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Quick Fill Box: SOLO en entorno de desarrollo */}
+              {isDevelopment && (
+                <div className="mt-5 pt-4 border-t border-slate-200">
+                  <div className="bg-[#FFFBF0] border border-[#FEB135]/40 border-l-4 border-l-[#FEB135] rounded-xl p-3 text-xs flex items-center justify-between gap-2 text-[#001558]">
+                    <div>
+                      <span className="text-slate-600 font-medium">
+                        Modo Desarrollo:{' '}
+                      </span>
+                      <span className="text-[#001558] font-mono font-bold">
+                        admin@agsch.cl
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleQuickFill}
+                      className="text-[#001558] hover:underline font-extrabold text-xs cursor-pointer shrink-0"
+                    >
+                      Autocompletar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Acceso secundario visible para familias y participantes */}
+              <div className="mt-6 pt-5 border-t border-slate-200">
+                <div className="bg-[#FFFBF0] border border-[#FEB135]/60 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-white border border-[#FEB135]/50 flex items-center justify-center shrink-0">
+                      <Heart className="w-4 h-4 text-red-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-extrabold text-[#001558]">
+                        ¿Eres participante o apoderado?
+                      </p>
+                      <p className="text-[11px] text-slate-600 leading-snug">
+                        Ingresa con tu RUT y código OTP para completar o revisar
+                        tu ficha de salud.
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    href="/ficha-medica"
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] font-black text-xs whitespace-nowrap transition-colors shadow-xs shrink-0"
+                  >
+                    Portal de Ficha Médica Oficial
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={handleQuickFill}
-                className="text-[#001558] hover:underline font-extrabold text-xs cursor-pointer"
-              >
-                Autocompletar
-              </button>
             </div>
+
+            <p className="text-center lg:text-right text-[11px] text-slate-500">
+              Asociación de Guías y Scouts de Chile • Identidad Visual Oficial
+              Kit Digital
+            </p>
           </div>
         </div>
-
-        <p className="text-center text-xs text-slate-500 mt-6">
-          Asociación de Guías y Scouts de Chile • Identidad Visual Oficial Kit Digital
-        </p>
       </div>
     </div>
   );

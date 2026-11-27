@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import {
@@ -22,8 +22,10 @@ import {
   Sparkles,
   Phone,
   Globe,
+  ShieldCheck,
 } from 'lucide-react';
 import { formatRut, cleanRut, validateRut } from '@/lib/rut';
+import { useToast } from '@/components/ui/ToastProvider';
 import type { ParticipantDTO, MedicalRecordDTO } from '@/types/domain';
 
 interface RequestOtpResponse {
@@ -54,8 +56,26 @@ interface SaveMedicalResponse {
   error?: string;
 }
 
+const STEPPER_STEPS = [
+  { num: 1 as const, label: 'Identificación' },
+  { num: 2 as const, label: 'Verificación OTP' },
+  { num: 3 as const, label: 'Ficha Médica Trilingüe' },
+];
+
+const SECTION_ANCHORS = [
+  { href: '#sec-biometria', label: 'Biometría' },
+  { href: '#sec-emergencia', label: 'Emergencia' },
+  { href: '#sec-seguro', label: 'Seguro' },
+  { href: '#sec-alergias', label: 'Alergias' },
+  { href: '#sec-cronicas', label: 'Crónicas' },
+  { href: '#sec-vacunas', label: 'Vacunas' },
+  { href: '#sec-consentimiento', label: 'Consentimiento' },
+];
+
 export default function FichaMedicaPage() {
   const params = useParams<{ id?: string }>();
+  const { toast } = useToast();
+  const errorAlertRef = useRef<HTMLDivElement | null>(null);
 
   // Estado de pasos: 1 = Pedir OTP, 2 = Validar OTP, 3 = Llenar/Ver Ficha
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -133,6 +153,12 @@ export default function FichaMedicaPage() {
   const [declaredByRut, setDeclaredByRut] = useState('');
   const [declaredByRole, setDeclaredByRole] = useState('APODERADO');
 
+  const scrollToErrorAlert = () => {
+    requestAnimationFrame(() => {
+      errorAlertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  };
+
   // Manejar solicitud de OTP
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,7 +166,9 @@ export default function FichaMedicaPage() {
 
     const cleaned = cleanRut(rutInput);
     if (!validateRut(cleaned)) {
-      setOtpError('Por favor ingresa un RUT chileno válido');
+      const msg = 'Por favor ingresa un RUT chileno válido';
+      setOtpError(msg);
+      toast.error(msg, 'RUT inválido');
       return;
     }
 
@@ -163,8 +191,14 @@ export default function FichaMedicaPage() {
       setMaskedEmail(data.maskedEmail);
       setDebugOtp(data.debugCode || null);
       setStep(2);
+      toast.success(
+        `Código de verificación enviado a ${data.maskedEmail}`,
+        'Código enviado'
+      );
     } catch (err: unknown) {
-      setOtpError(err instanceof Error ? err.message : 'Error al solicitar código');
+      const msg = err instanceof Error ? err.message : 'Error al solicitar código';
+      setOtpError(msg);
+      toast.error(msg, 'No se pudo enviar el código');
     } finally {
       setRequestingOtp(false);
     }
@@ -176,7 +210,9 @@ export default function FichaMedicaPage() {
     setOtpError(null);
 
     if (!otpCode.trim() || otpCode.trim().length !== 6) {
-      setOtpError('Ingresa el código numérico de 6 dígitos');
+      const msg = 'Ingresa el código numérico de 6 dígitos';
+      setOtpError(msg);
+      toast.error(msg, 'Código incompleto');
       return;
     }
 
@@ -254,8 +290,14 @@ export default function FichaMedicaPage() {
       setDeclaredByRole(m.declaredByRole || 'APODERADO');
 
       setStep(3);
+      toast.success(
+        'Identidad verificada. Ya puedes revisar y actualizar la ficha médica.',
+        'Verificación exitosa'
+      );
     } catch (err: unknown) {
-      setOtpError(err instanceof Error ? err.message : 'Error al validar el código');
+      const msg = err instanceof Error ? err.message : 'Error al validar el código';
+      setOtpError(msg);
+      toast.error(msg, 'Código inválido');
     } finally {
       setVerifyingOtp(false);
     }
@@ -269,7 +311,11 @@ export default function FichaMedicaPage() {
     setOtpError(null);
 
     if (!emergencyTreatmentConsent) {
-      alert('Debes aceptar la autorización de tratamiento médico de emergencia en el extranjero para continuar.');
+      const msg =
+        'Debes aceptar la autorización de tratamiento médico de emergencia en el extranjero para continuar.';
+      setOtpError(msg);
+      toast.error(msg, 'Consentimiento obligatorio');
+      scrollToErrorAlert();
       return;
     }
 
@@ -322,9 +368,16 @@ export default function FichaMedicaPage() {
       setQrEmergencyUrl(data.qrEmergencyUrl);
       setQrDataUrl(data.qrDataUrl);
       setSaveSuccessMsg('¡Ficha médica guardada y traducida rigurosamente al inglés y polaco con éxito!');
+      toast.success(
+        'Ficha médica guardada y traducida al inglés y polaco.',
+        'Ficha actualizada'
+      );
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: unknown) {
-      setOtpError(err instanceof Error ? err.message : 'Error al guardar ficha médica');
+      const msg = err instanceof Error ? err.message : 'Error al guardar ficha médica';
+      setOtpError(msg);
+      toast.error(msg, 'Error al guardar');
+      scrollToErrorAlert();
     } finally {
       setSavingMedical(false);
     }
@@ -364,9 +417,56 @@ export default function FichaMedicaPage() {
       </header>
 
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6">
+        {/* Stepper Visual de 3 Pasos */}
+        <nav
+          aria-label="Progreso de ficha médica"
+          className="mb-6 bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-2xs print:hidden"
+        >
+          <ol className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
+            {STEPPER_STEPS.map((item) => {
+              const isCompleted = step > item.num;
+              const isCurrent = step === item.num;
+
+              return (
+                <li
+                  key={item.num}
+                  aria-current={isCurrent ? 'step' : undefined}
+                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl border transition-all ${
+                    isCurrent
+                      ? 'bg-[#FFFBF0] border-[#FEB135] text-[#001558] shadow-2xs'
+                      : isCompleted
+                        ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                        : 'bg-[#F5F6F8] border-slate-200 text-slate-400'
+                  }`}
+                >
+                  <span
+                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                      isCurrent
+                        ? 'bg-[#001558] text-[#FEB135]'
+                        : isCompleted
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-white border border-slate-300 text-slate-400'
+                    }`}
+                  >
+                    {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : item.num}
+                  </span>
+                  <div className="min-w-0">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider opacity-75">
+                      Paso {item.num}
+                    </span>
+                    <span className="block text-xs font-extrabold truncate">
+                      {item.label}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+
         {/* PASO 1: Ingreso de RUT y Correo */}
         {step === 1 && (
-          <div className="max-w-md mx-auto my-8 bg-white border border-slate-200 border-t-4 border-t-[#001558] rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+          <div className="max-w-md mx-auto my-6 bg-white border border-slate-200 border-t-4 border-t-[#001558] rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
             <div className="text-center space-y-2">
               <div className="w-14 h-14 rounded-2xl bg-[#FFFBF0] border border-[#FEB135]/50 text-[#001558] flex items-center justify-center mx-auto shadow-xs">
                 <Heart className="w-7 h-7 text-red-600" />
@@ -378,7 +478,11 @@ export default function FichaMedicaPage() {
             </div>
 
             {otpError && (
-              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2 font-medium">
+              <div
+                ref={errorAlertRef}
+                role="alert"
+                className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2 font-medium"
+              >
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
                 <span>{otpError}</span>
               </div>
@@ -445,7 +549,7 @@ export default function FichaMedicaPage() {
 
         {/* PASO 2: Validación del Código de 6 Dígitos */}
         {step === 2 && (
-          <div className="max-w-md mx-auto my-8 bg-white border border-slate-200 border-t-4 border-t-[#001558] rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+          <div className="max-w-md mx-auto my-6 bg-white border border-slate-200 border-t-4 border-t-[#001558] rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
             <div className="text-center space-y-2">
               <div className="w-14 h-14 rounded-2xl bg-[#FFFBF0] border border-[#FEB135]/50 text-[#001558] flex items-center justify-center mx-auto shadow-xs">
                 <Lock className="w-7 h-7 text-[#001558]" />
@@ -459,7 +563,11 @@ export default function FichaMedicaPage() {
             </div>
 
             {otpError && (
-              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2 font-medium">
+              <div
+                ref={errorAlertRef}
+                role="alert"
+                className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2 font-medium"
+              >
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
                 <span>{otpError}</span>
               </div>
@@ -545,6 +653,7 @@ export default function FichaMedicaPage() {
                   <span className="font-bold">{saveSuccessMsg}</span>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setSaveSuccessMsg(null)}
                   className="text-emerald-700 hover:text-emerald-950 font-bold ml-2 cursor-pointer"
                 >
@@ -554,9 +663,22 @@ export default function FichaMedicaPage() {
             )}
 
             {otpError && (
-              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2 shadow-xs">
-                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-                <span className="font-semibold">{otpError}</span>
+              <div
+                ref={errorAlertRef}
+                role="alert"
+                className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between gap-2 shadow-xs"
+              >
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span className="font-semibold">{otpError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOtpError(null)}
+                  className="text-red-700 hover:text-red-950 font-bold ml-2 cursor-pointer"
+                >
+                  ✕
+                </button>
               </div>
             )}
 
@@ -795,8 +917,30 @@ export default function FichaMedicaPage() {
             {/* Formulario en Español (Edición y Guardado) */}
             {activeLangTab === 'es' && (
               <form onSubmit={handleSaveMedical} className="space-y-6">
+                {/* Barra Rápida de Navegación Interna */}
+                <nav
+                  aria-label="Secciones de la ficha médica"
+                  className="bg-white border border-slate-200 rounded-2xl p-2.5 shadow-2xs flex flex-wrap items-center gap-1.5 print:hidden"
+                >
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 px-2">
+                    Ir a:
+                  </span>
+                  {SECTION_ANCHORS.map((sec) => (
+                    <a
+                      key={sec.href}
+                      href={sec.href}
+                      className="px-3 py-1.5 rounded-xl bg-[#F5F6F8] hover:bg-[#FFFBF0] border border-slate-200 hover:border-[#FEB135] text-[#001558] text-xs font-bold transition-colors"
+                    >
+                      {sec.label}
+                    </a>
+                  ))}
+                </nav>
+
                 {/* 1. Biometría y Grupo Sanguíneo */}
-                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+                <div
+                  id="sec-biometria"
+                  className="scroll-mt-24 bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4"
+                >
                   <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-[#001558] font-bold text-xs uppercase tracking-wider">
                     <Droplet className="w-4 h-4 text-red-600" />
                     <span>1. Grupo Sanguíneo y Datos Biométricos</span>
@@ -849,7 +993,10 @@ export default function FichaMedicaPage() {
                 </div>
 
                 {/* 2. Contacto de Emergencia */}
-                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+                <div
+                  id="sec-emergencia"
+                  className="scroll-mt-24 bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4"
+                >
                   <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-[#001558] font-bold text-xs uppercase tracking-wider">
                     <Phone className="w-4 h-4 text-[#FEB135]" />
                     <span>2. Contacto de Emergencia en Chile (Apoderado / Familiar Directo)</span>
@@ -901,12 +1048,65 @@ export default function FichaMedicaPage() {
                   </div>
                 </div>
 
-                {/* 3. Alergias e Hipersensibilidades */}
-                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+                {/* 3. Seguro de Asistencia Internacional */}
+                <div
+                  id="sec-seguro"
+                  className="scroll-mt-24 bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4"
+                >
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-[#001558] font-bold text-xs uppercase tracking-wider">
+                    <ShieldCheck className="w-4 h-4 text-[#FEB135]" />
+                    <span>3. Seguro de Asistencia Internacional en Viaje</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">
+                        Aseguradora / Convenio
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Seguro de Asistencia Internacional WSJ 2027"
+                        value={insuranceCompany}
+                        onChange={(e) => setInsuranceCompany(e.target.value)}
+                        className={inputClassName}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">
+                        N° de Póliza (si aplica)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Póliza Grupal Contingente WSJ"
+                        value={insurancePolicyNumber}
+                        onChange={(e) => setInsurancePolicyNumber(e.target.value)}
+                        className={`${inputClassName} font-mono`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">
+                        Teléfono de Asistencia 24/7
+                      </label>
+                      <input
+                        type="tel"
+                        placeholder="+56 2 2999 0000"
+                        value={insuranceEmergencyPhone}
+                        onChange={(e) => setInsuranceEmergencyPhone(e.target.value)}
+                        className={`${inputClassName} font-mono`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Alergias e Hipersensibilidades */}
+                <div
+                  id="sec-alergias"
+                  className="scroll-mt-24 bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4"
+                >
                   <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
                     <div className="flex items-center gap-2 text-red-700 font-bold text-xs uppercase tracking-wider">
                       <AlertTriangle className="w-4 h-4 text-red-600" />
-                      <span>3. Alergias a Medicamentos, Alimentos o Picaduras</span>
+                      <span>4. Alergias a Medicamentos, Alimentos o Picaduras</span>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-4 text-xs">
@@ -949,12 +1149,15 @@ export default function FichaMedicaPage() {
                   </div>
                 </div>
 
-                {/* 4. Condiciones Médicas Crónicas */}
-                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+                {/* 5. Condiciones Médicas Crónicas */}
+                <div
+                  id="sec-cronicas"
+                  className="scroll-mt-24 bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4"
+                >
                   <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
                     <div className="flex items-center gap-2 text-[#001558] font-bold text-xs uppercase tracking-wider">
                       <Heart className="w-4 h-4 text-[#FEB135]" />
-                      <span>4. Condiciones Médicas Crónicas / Diagnósticos Previos</span>
+                      <span>5. Condiciones Médicas Crónicas / Diagnósticos Previos</span>
                     </div>
 
                     <label className="flex items-center gap-2 cursor-pointer text-[#001558] text-xs font-bold">
@@ -982,12 +1185,12 @@ export default function FichaMedicaPage() {
                   </div>
                 </div>
 
-                {/* 5. Medicación Habitual */}
+                {/* 6. Medicación Habitual */}
                 <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
                     <div className="flex items-center gap-2 text-[#001558] font-bold text-xs uppercase tracking-wider">
                       <Pill className="w-4 h-4 text-indigo-600" />
-                      <span>5. Medicamentos Habituales / Uso Continuo</span>
+                      <span>6. Medicamentos Habituales / Uso Continuo</span>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-4 text-xs">
@@ -1027,11 +1230,11 @@ export default function FichaMedicaPage() {
                   </div>
                 </div>
 
-                {/* 6. Restricciones Alimentarias y Dietas */}
+                {/* 7. Restricciones Alimentarias y Dietas */}
                 <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
                   <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-[#001558] font-bold text-xs uppercase tracking-wider">
                     <FileText className="w-4 h-4 text-emerald-600" />
-                    <span>6. Régimen Alimentario / Intolerancias</span>
+                    <span>7. Régimen Alimentario / Intolerancias</span>
                   </div>
 
                   <div className="text-xs space-y-2">
@@ -1057,11 +1260,14 @@ export default function FichaMedicaPage() {
                   </div>
                 </div>
 
-                {/* 7. Vacunación */}
-                <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+                {/* 8. Vacunación */}
+                <div
+                  id="sec-vacunas"
+                  className="scroll-mt-24 bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4"
+                >
                   <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-[#001558] font-bold text-xs uppercase tracking-wider">
                     <Syringe className="w-4 h-4 text-sky-600" />
-                    <span>7. Vacunación e Inmunizaciones</span>
+                    <span>8. Vacunación e Inmunizaciones</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
@@ -1097,11 +1303,11 @@ export default function FichaMedicaPage() {
                   </div>
                 </div>
 
-                {/* 8. Cirugías, Dispositivos y Limitaciones Físicas */}
+                {/* 9. Cirugías, Dispositivos y Limitaciones Físicas */}
                 <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
                   <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-[#001558] font-bold text-xs uppercase tracking-wider">
                     <UserCheck className="w-4 h-4 text-[#001558]" />
-                    <span>8. Cirugías Previas, Dispositivos y Limitaciones Físicas</span>
+                    <span>9. Cirugías Previas, Dispositivos y Limitaciones Físicas</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
@@ -1138,11 +1344,14 @@ export default function FichaMedicaPage() {
                   </div>
                 </div>
 
-                {/* 9. Declaración Jurada y Consentimiento */}
-                <div className="bg-[#FFFBF0] border border-[#FEB135]/50 border-l-4 border-l-[#FEB135] rounded-3xl p-6 shadow-xs space-y-4 text-[#001558]">
+                {/* 10. Declaración Jurada y Consentimiento */}
+                <div
+                  id="sec-consentimiento"
+                  className="scroll-mt-24 bg-[#FFFBF0] border border-[#FEB135]/50 border-l-4 border-l-[#FEB135] rounded-3xl p-6 shadow-xs space-y-4 text-[#001558]"
+                >
                   <div className="flex items-center gap-2 font-black text-sm uppercase tracking-wider">
                     <Shield className="w-5 h-5 text-[#FEB135]" />
-                    <span>9. Declaración y Autorización de Tratamiento Médico de Emergencia en Polonia</span>
+                    <span>10. Declaración y Autorización de Tratamiento Médico de Emergencia en Polonia</span>
                   </div>
 
                   <p className="text-xs text-slate-700 leading-relaxed">
@@ -1157,7 +1366,6 @@ export default function FichaMedicaPage() {
                       type="checkbox"
                       checked={emergencyTreatmentConsent}
                       onChange={(e) => setEmergencyTreatmentConsent(e.target.checked)}
-                      required
                       className="w-5 h-5 accent-[#001558] rounded mt-0.5 shrink-0"
                     />
                     <span>
@@ -1203,25 +1411,45 @@ export default function FichaMedicaPage() {
                   </div>
                 </div>
 
-                {/* Botón Principal Guardar */}
-                <div className="pt-2 print:hidden">
-                  <button
-                    type="submit"
-                    disabled={savingMedical}
-                    className="w-full py-4 rounded-2xl bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] font-black text-base flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-50 transition-all"
-                  >
-                    {savingMedical ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Guardando y Traduciendo a Inglés y Polaco...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-5 h-5" />
-                        Guardar Ficha Oficial y Generar Traducciones Clínicas
-                      </>
-                    )}
-                  </button>
+                {/* Barra de Acciones Inferior Pegajosa */}
+                <div className="sticky bottom-3 z-20 print:hidden">
+                  <div className="bg-white/95 backdrop-blur-sm border border-slate-200 border-t-2 border-t-[#001558] rounded-2xl p-3.5 sm:p-4 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 text-xs">
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                          savingMedical ? 'bg-[#FEB135] animate-pulse' : 'bg-emerald-500'
+                        }`}
+                      />
+                      <div>
+                        <p className="font-extrabold text-[#001558]">
+                          {savingMedical
+                            ? 'Guardando y traduciendo ficha médica...'
+                            : 'Cambios listos para guardar y traducir'}
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          Se generará automáticamente el reporte clínico en Inglés y Polaco.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={savingMedical}
+                      className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] font-black text-sm flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50 transition-all shrink-0"
+                    >
+                      {savingMedical ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Guardando y Traduciendo...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4" />
+                          Guardar y Traducir Ficha
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </form>
             )}

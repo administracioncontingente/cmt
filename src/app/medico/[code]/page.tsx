@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import {
   AlertTriangle,
   Phone,
+  PhoneOff,
   Shield,
   Heart,
   Droplet,
@@ -25,6 +26,15 @@ interface EmergencyMedicalResponse {
   qrEmergencyUrl?: string;
   qrDataUrl?: string;
   error?: string;
+}
+
+function normalizeTelHref(phone?: string | null): string | null {
+  const trimmed = phone?.trim();
+  if (!trimmed || !/\d{3,}/.test(trimmed)) {
+    return null;
+  }
+  const sanitized = trimmed.replace(/[^+\d]/g, '');
+  return sanitized.length >= 3 ? `tel:${sanitized}` : null;
 }
 
 function MedicalContent() {
@@ -109,13 +119,32 @@ function MedicalContent() {
   const t = {
     en: {
       emergencyTitle: 'WSJ 2027 EMERGENCY MEDICAL PROFILE',
+      polandBadge: 'POLAND 2027',
       subtitle: 'Chilean Contingent • 26th World Scout Jamboree Poland 2027',
       criticalAlert: 'CRITICAL MEDICAL ALERT / HIGH RISK',
       allergies: 'Allergies & Hypersensitivities',
       epipen: 'PATIENT CARRIES EPINEPHRINE AUTO-INJECTOR (EpiPen)',
       bloodType: 'Blood Type / Rh Group',
+      rutPassport: 'RUT / Passport ID',
+      roleInWsj: 'Role in WSJ',
+      genderBirth: 'Gender / Birth',
+      notReported: 'N/R',
+      notSpecified: 'N/A',
+      heightLabel: 'Height',
+      weightLabel: 'Weight',
+      heightNotReported: 'Height N/R',
+      weightNotReported: 'Weight N/R',
       emergencyContact: 'Emergency Contact Person',
+      defaultContactName: 'Guardian / Emergency Contact',
+      relationship: 'Relationship',
+      defaultRelationship: 'Parent / Guardian',
+      callEmergencyAction: 'Call Emergency',
+      noPhoneRegistered: 'No Phone Registered',
       travelInsurance: 'International Travel Insurance',
+      defaultInsuranceCompany: 'Assistance / Travel Insurance Policy',
+      policyNumber: 'Policy Number',
+      defaultPolicyNumber: 'Contingent Group Policy WSJ',
+      insuranceEmergencyLine: 'Insurance Emergency Line',
       chronicConditions: 'Chronic Medical Conditions',
       currentMedications: 'Current Daily Medications',
       coldChain: 'COLD CHAIN REFRIGERATION REQUIRED (2-8°C)',
@@ -127,16 +156,39 @@ function MedicalContent() {
       consent: 'Emergency Medical Treatment Authorization Granted',
       print: 'Print Medical Sheet',
       verified: 'Medical declaration recorded & signed by guardian',
+      guardianFallback: 'Guardian',
+      activeStatus: 'Active',
+      qrCodeId: 'QR Code ID',
+      qrCodeAlt: 'Emergency QR Code',
     },
     pl: {
       emergencyTitle: 'KARTA MEDYCZNA RATUNKOWA WSJ 2027',
+      polandBadge: 'POLSKA 2027',
       subtitle: 'Kontyngent Chile • 26. Światowe Jamboree Skautowe Polska 2027',
       criticalAlert: 'KRYTYCZNE OSTRZEŻENIE MEDYCZNE / WYSOKIE RYZYKO',
       allergies: 'Alergie i Nadwrażliwości',
       epipen: 'PACJENT POSIADA AUTOWSTRZYKIWACZ Z ADRENALINĄ (EpiPen)',
       bloodType: 'Grupa Krwi / Czynnik Rh',
+      rutPassport: 'RUT / Nr Paszportu',
+      roleInWsj: 'Rola na WSJ',
+      genderBirth: 'Płeć / Data ur.',
+      notReported: 'B/D',
+      notSpecified: 'B/D',
+      heightLabel: 'Wzrost',
+      weightLabel: 'Waga',
+      heightNotReported: 'Wzrost: B/D',
+      weightNotReported: 'Waga: B/D',
       emergencyContact: 'Osoba do Kontaktu w Nagłych Wypadkach',
+      defaultContactName: 'Opiekun / Kontakt Alarmowy',
+      relationship: 'Relacja',
+      defaultRelationship: 'Rodzic / Opiekun',
+      callEmergencyAction: 'Zadzwoń teraz',
+      noPhoneRegistered: 'Brak zarejestrowanego numeru',
       travelInsurance: 'Międzynarodowe Ubezpieczenie Podróżne',
+      defaultInsuranceCompany: 'Polisa Ubezpieczenia Podróżnego',
+      policyNumber: 'Numer Polisy',
+      defaultPolicyNumber: 'Polisa Grupowa Kontyngentu WSJ',
+      insuranceEmergencyLine: 'Linia Alarmowa Ubezpieczyciela',
       chronicConditions: 'Choroby Przewlekłe',
       currentMedications: 'Aktualnie Przyjmowane Leki',
       coldChain: 'WYMAGANE PRZECHOWYWANIE W LODÓWCE (2-8°C)',
@@ -148,16 +200,39 @@ function MedicalContent() {
       consent: 'Zgoda na Ratunkowe Leczenie Medyczne w Polsce',
       print: 'Drukuj Kartę Medyczną',
       verified: 'Deklaracja medyczna podpisana przez opiekuna',
+      guardianFallback: 'Opiekun',
+      activeStatus: 'Aktywna',
+      qrCodeId: 'ID Kodu QR',
+      qrCodeAlt: 'Ratunkowy Kod QR',
     },
     es: {
       emergencyTitle: 'FICHA MÉDICA DE EMERGENCIA WSJ 2027',
+      polandBadge: 'POLONIA 2027',
       subtitle: 'Contingente Chileno • 26° Jamboree Scout Mundial Polonia 2027',
       criticalAlert: 'ALERTA MÉDICA CRÍTICA / ALTO RIESGO',
       allergies: 'Alergias e Hipersensibilidades',
       epipen: 'EL PARTICIPANTE PORTA AUTOINYECTOR DE EPINEFRINA (EpiPen)',
       bloodType: 'Grupo Sanguíneo / Factor Rh',
+      rutPassport: 'RUT / Pasaporte',
+      roleInWsj: 'Rol en el WSJ',
+      genderBirth: 'Género / Nacimiento',
+      notReported: 'N/R',
+      notSpecified: 'N/A',
+      heightLabel: 'Estatura',
+      weightLabel: 'Peso',
+      heightNotReported: 'Estatura N/R',
+      weightNotReported: 'Peso N/R',
       emergencyContact: 'Contacto de Emergencia',
+      defaultContactName: 'Apoderado / Contacto de Emergencia',
+      relationship: 'Parentesco',
+      defaultRelationship: 'Padre / Apoderado',
+      callEmergencyAction: 'Llamar a Emergencia',
+      noPhoneRegistered: 'Sin teléfono registrado',
       travelInsurance: 'Seguro de Asistencia en Viaje',
+      defaultInsuranceCompany: 'Seguro de Asistencia en Viaje',
+      policyNumber: 'N° de Póliza',
+      defaultPolicyNumber: 'Póliza Grupal Contingente WSJ',
+      insuranceEmergencyLine: 'Línea de Emergencia del Seguro',
       chronicConditions: 'Condiciones Médicas Crónicas',
       currentMedications: 'Medicamentos Habituales',
       coldChain: 'REQUIERE CADENA DE FRÍO (Refrigeración 2-8°C)',
@@ -169,8 +244,21 @@ function MedicalContent() {
       consent: 'Consentimiento para Tratamiento de Emergencia en Polonia',
       print: 'Imprimir Ficha',
       verified: 'Declaración médica completada y firmada por apoderado',
+      guardianFallback: 'Apoderado',
+      activeStatus: 'Vigente',
+      qrCodeId: 'ID Código QR',
+      qrCodeAlt: 'Código QR de Emergencia',
     },
   }[lang];
+
+  const dateLocale = lang === 'pl' ? 'pl-PL' : lang === 'es' ? 'es-CL' : 'en-GB';
+
+  const emergencyPhoneDisplay =
+    medicalRecord.emergencyContactPhone?.trim() || participant.guardianPhone?.trim() || '';
+  const emergencyTelHref = normalizeTelHref(emergencyPhoneDisplay);
+
+  const insurancePhoneDisplay = medicalRecord.insuranceEmergencyPhone?.trim() || '';
+  const insuranceTelHref = normalizeTelHref(insurancePhoneDisplay);
 
   const getAllergies = () => {
     if (lang === 'pl') return medicalRecord.allergiesPL || medicalRecord.allergiesES || 'Brak zgłoszonych alergii';
@@ -249,11 +337,16 @@ function MedicalContent() {
     return medicalRecord.physicalLimitationsES || 'Capacidad física completa sin limitaciones';
   };
 
+  const hasCriticalAlerts =
+    Boolean(medicalRecord.hasSevereAllergies) ||
+    Boolean(medicalRecord.carriesEpiPen) ||
+    Boolean(medicalRecord.requiresColdChainMedication);
+
   return (
     <div className="min-h-screen bg-[#F5F6F8] text-slate-800 p-3 sm:p-6 print:bg-white print:text-black print:p-0">
       <div className="max-w-4xl mx-auto space-y-4">
         {/* Top Header / Language Switcher */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#001558] border-b-4 border-b-[#FEB135] rounded-2xl p-4 shadow-md text-white print:rounded-none print:shadow-none">
+        <header className="flex flex-wrap items-center justify-between gap-3 bg-[#001558] border-b-4 border-b-[#FEB135] rounded-2xl p-4 shadow-md text-white print:rounded-none print:shadow-none">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-red-600 text-white flex items-center justify-center font-black text-2xl shadow-sm shrink-0">
               +
@@ -264,7 +357,7 @@ function MedicalContent() {
                   {t.emergencyTitle}
                 </span>
                 <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#FEB135] text-[#001558] uppercase">
-                  POLAND 2027
+                  {t.polandBadge}
                 </span>
               </div>
               <p className="text-xs text-slate-200">{t.subtitle}</p>
@@ -312,169 +405,200 @@ function MedicalContent() {
               <Printer className="w-4 h-4" />
             </button>
           </div>
-        </div>
+        </header>
 
         {/* Critical Alerts Banner (Severe Allergies / EpiPen / Cold Chain) */}
-        {(medicalRecord.hasSevereAllergies ||
-          medicalRecord.carriesEpiPen ||
-          medicalRecord.requiresColdChainMedication) && (
-          <div className="bg-red-50 border-2 border-red-600 rounded-2xl p-4 sm:p-5 shadow-sm text-red-950 space-y-2.5">
-            <div className="flex items-center gap-2 text-red-800 font-black text-sm uppercase tracking-wider">
-              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+        {hasCriticalAlerts && (
+          <section
+            aria-label={t.criticalAlert}
+            className="bg-red-50 border-2 border-red-600 rounded-2xl overflow-hidden shadow-md text-red-950 print:shadow-none print:break-inside-avoid"
+          >
+            <div className="bg-red-600 text-white px-4 py-2.5 flex items-center gap-2 font-black text-xs sm:text-sm uppercase tracking-wider">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
               <span>{t.criticalAlert}</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
               {medicalRecord.hasSevereAllergies && (
-                <div className="bg-white p-3 rounded-xl border border-red-300 text-red-900 font-bold">
-                  ⚠️ {t.allergies}: {getAllergies()}
+                <div className="bg-white p-3.5 rounded-xl border-2 border-red-300 text-red-900 font-bold shadow-2xs">
+                  <span className="block text-[10px] uppercase tracking-wider text-red-700 mb-1">
+                    {t.allergies}
+                  </span>
+                  <span>{getAllergies()}</span>
                 </div>
               )}
               {medicalRecord.carriesEpiPen && (
-                <div className="bg-[#FFFBF0] p-3 rounded-xl border border-[#FEB135] text-[#001558] font-black flex items-center gap-2">
-                  <Syringe className="w-4 h-4 text-red-600 shrink-0" />
+                <div className="bg-[#FFFBF0] p-3.5 rounded-xl border-2 border-[#FEB135] text-[#001558] font-black flex items-center gap-2.5 shadow-2xs">
+                  <Syringe className="w-5 h-5 text-red-600 shrink-0" />
                   <span>{t.epipen}</span>
                 </div>
               )}
               {medicalRecord.requiresColdChainMedication && (
-                <div className="bg-sky-50 p-3 rounded-xl border border-sky-300 text-sky-950 font-bold">
+                <div className="bg-sky-50 p-3.5 rounded-xl border-2 border-sky-300 text-sky-950 font-bold sm:col-span-2">
                   ❄️ {t.coldChain}
                 </div>
               )}
             </div>
-          </div>
+          </section>
         )}
 
-        {/* Patient Identity & Key Metrics */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs grid grid-cols-1 md:grid-cols-3 gap-4 print:shadow-none">
-          <div className="md:col-span-2 space-y-2">
+        {/* Patient Identity & Prominent Blood Type */}
+        <section className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs grid grid-cols-1 md:grid-cols-3 gap-4 print:shadow-none print:border-slate-300 print:break-inside-avoid">
+          {/* Blood Type & Biometrics first on mobile for rapid emergency scanning */}
+          <div className="order-1 md:order-2 bg-red-50 border-2 border-red-300 rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-2xs print:shadow-none">
+            <span className="text-[11px] font-black text-red-800 uppercase tracking-wider mb-1">
+              {t.bloodType}
+            </span>
+            <div className="flex items-center gap-2 text-4xl font-black text-red-700 leading-none py-1">
+              <Droplet className="w-7 h-7 text-red-600 fill-red-600 shrink-0" />
+              <span>{medicalRecord.bloodType || t.notReported}</span>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-slate-800 font-bold mt-2">
+              <span className="px-2.5 py-0.5 rounded-lg bg-white border border-red-200">
+                {medicalRecord.heightCm
+                  ? `${t.heightLabel}: ${medicalRecord.heightCm} cm`
+                  : t.heightNotReported}
+              </span>
+              <span className="px-2.5 py-0.5 rounded-lg bg-white border border-red-200">
+                {medicalRecord.weightKg
+                  ? `${t.weightLabel}: ${medicalRecord.weightKg} kg`
+                  : t.weightNotReported}
+              </span>
+            </div>
+          </div>
+
+          <div className="order-2 md:order-1 md:col-span-2 flex flex-col justify-center space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-black text-[#001558]">
                 {participant.firstName} {participant.lastName} {participant.secondLastName || ''}
               </h1>
               {participant.cupoCode && (
-                <span className="px-2 py-0.5 rounded bg-[#FFF8E1] border border-[#FEB135] text-[#001558] text-xs font-mono font-bold">
+                <span className="px-2.5 py-0.5 rounded-lg bg-[#FFF8E1] border border-[#FEB135] text-[#001558] text-xs font-mono font-bold">
                   {participant.cupoCode}
                 </span>
               )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-slate-600">
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">
-                  RUT / Passport ID
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs text-slate-600">
+              <div className="bg-[#F5F6F8] p-2.5 rounded-xl border border-slate-200">
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">
+                  {t.rutPassport}
                 </span>
                 <span className="font-mono font-bold text-[#001558]">{participant.rut}</span>
               </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">
-                  Role in WSJ
+              <div className="bg-[#F5F6F8] p-2.5 rounded-xl border border-slate-200">
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">
+                  {t.roleInWsj}
                 </span>
-                <span className="font-bold text-[#001558]">{participant.contingentRole || 'N/A'}</span>
+                <span className="font-bold text-[#001558]">
+                  {participant.contingentRole || t.notSpecified}
+                </span>
               </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">
-                  Gender / Birth
+              <div className="bg-[#F5F6F8] p-2.5 rounded-xl border border-slate-200 col-span-2 sm:col-span-1">
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">
+                  {t.genderBirth}
                 </span>
                 <span className="font-medium text-slate-800">
-                  {participant.gender || 'N/R'} •{' '}
+                  {participant.gender || t.notReported} •{' '}
                   {participant.birthDate
-                    ? new Date(participant.birthDate).toLocaleDateString()
-                    : 'N/R'}
+                    ? new Date(participant.birthDate).toLocaleDateString(dateLocale)
+                    : t.notReported}
                 </span>
               </div>
             </div>
           </div>
-
-          {/* Blood Type & Biometrics */}
-          <div className="bg-red-50 border-2 border-red-200 rounded-xl p-3 flex flex-col items-center justify-center text-center">
-            <span className="text-[10px] font-bold text-red-800 uppercase tracking-wider mb-1">
-              {t.bloodType}
-            </span>
-            <div className="flex items-center gap-1.5 text-3xl font-black text-red-700">
-              <Droplet className="w-6 h-6 text-red-600 fill-red-600" />
-              <span>{medicalRecord.bloodType || 'N/R'}</span>
-            </div>
-            <div className="flex items-center gap-3 text-[11px] text-slate-700 font-semibold mt-1">
-              <span>{medicalRecord.heightCm ? `${medicalRecord.heightCm} cm` : 'Height N/R'}</span>
-              <span>•</span>
-              <span>{medicalRecord.weightKg ? `${medicalRecord.weightKg} kg` : 'Weight N/R'}</span>
-            </div>
-          </div>
-        </div>
+        </section>
 
         {/* Emergency Contacts & Insurance */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 print:break-inside-avoid">
           {/* Emergency Contact */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-2 print:shadow-none">
-            <div className="flex items-center gap-2 text-xs font-bold text-[#001558] uppercase tracking-wider">
-              <Phone className="w-4 h-4 text-[#FEB135]" />
-              <span>{t.emergencyContact}</span>
-            </div>
-            <div className="text-xs space-y-1">
-              <p className="font-bold text-[#001558] text-sm">
+          <div className="bg-white border-2 border-[#001558]/15 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between gap-3 print:shadow-none print:border-slate-300">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-black text-[#001558] uppercase tracking-wider">
+                <Phone className="w-4 h-4 text-[#FEB135]" />
+                <span>{t.emergencyContact}</span>
+              </div>
+              <p className="font-black text-[#001558] text-base">
                 {medicalRecord.emergencyContactName ||
                   participant.guardianName ||
-                  'Guardian / Emergency Contact'}
+                  t.defaultContactName}
               </p>
-              <p className="text-slate-600">
-                Relationship:{' '}
-                <span className="font-semibold text-slate-800">
+              <p className="text-xs text-slate-600">
+                {t.relationship}:{' '}
+                <span className="font-bold text-slate-800">
                   {medicalRecord.emergencyContactRelation ||
                     participant.guardianRelationship ||
-                    'Parent / Guardian'}
+                    t.defaultRelationship}
                 </span>
               </p>
-              <div className="pt-2">
-                <a
-                  href={`tel:${medicalRecord.emergencyContactPhone || participant.guardianPhone || ''}`}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-xs"
-                >
-                  <Phone className="w-3.5 h-3.5" />
-                  <span>
-                    {medicalRecord.emergencyContactPhone ||
-                      participant.guardianPhone ||
-                      'No Phone Registered'}
-                  </span>
-                </a>
-              </div>
             </div>
-          </div>
 
-          {/* Travel Insurance */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-2 print:shadow-none">
-            <div className="flex items-center gap-2 text-xs font-bold text-[#001558] uppercase tracking-wider">
-              <Shield className="w-4 h-4 text-[#FEB135]" />
-              <span>{t.travelInsurance}</span>
-            </div>
-            <div className="text-xs space-y-1">
-              <p className="font-bold text-[#001558] text-sm">
-                {medicalRecord.insuranceCompany || 'Assistance / Travel Insurance Policy'}
-              </p>
-              <p className="text-slate-600">
-                Policy N°:{' '}
-                <span className="font-mono font-bold text-slate-900">
-                  {medicalRecord.insurancePolicyNumber || 'Contingent Group Policy WSJ'}
-                </span>
-              </p>
-              {medicalRecord.insuranceEmergencyPhone && (
-                <div className="pt-2">
-                  <a
-                    href={`tel:${medicalRecord.insuranceEmergencyPhone}`}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#EEF2FF] border border-[#001558]/20 text-[#001558] text-xs font-mono font-bold"
-                  >
-                    <Phone className="w-3 h-3" />
-                    <span>Emergency: {medicalRecord.insuranceEmergencyPhone}</span>
-                  </a>
+            <div className="pt-1">
+              {emergencyTelHref ? (
+                <a
+                  href={emergencyTelHref}
+                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-sm sm:text-base transition-colors shadow-sm print:bg-white print:text-black print:border print:border-slate-400"
+                >
+                  <Phone className="w-4 h-4 shrink-0" />
+                  <span>{t.callEmergencyAction}:</span>
+                  <span className="font-mono">{emergencyPhoneDisplay}</span>
+                </a>
+              ) : (
+                <div
+                  aria-disabled="true"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 font-bold text-xs"
+                >
+                  <PhoneOff className="w-4 h-4 shrink-0" />
+                  <span>{t.noPhoneRegistered}</span>
                 </div>
               )}
             </div>
           </div>
-        </div>
+
+          {/* Travel Insurance */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between gap-3 print:shadow-none print:border-slate-300">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-black text-[#001558] uppercase tracking-wider">
+                <Shield className="w-4 h-4 text-[#FEB135]" />
+                <span>{t.travelInsurance}</span>
+              </div>
+              <p className="font-black text-[#001558] text-base">
+                {medicalRecord.insuranceCompany || t.defaultInsuranceCompany}
+              </p>
+              <p className="text-xs text-slate-600">
+                {t.policyNumber}:{' '}
+                <span className="font-mono font-bold text-slate-900">
+                  {medicalRecord.insurancePolicyNumber || t.defaultPolicyNumber}
+                </span>
+              </p>
+            </div>
+
+            <div className="pt-1">
+              {insuranceTelHref ? (
+                <a
+                  href={insuranceTelHref}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#EEF2FF] hover:bg-[#dfe6ff] border border-[#001558]/25 text-[#001558] text-xs sm:text-sm font-black transition-colors print:bg-white print:border-slate-400"
+                >
+                  <Phone className="w-4 h-4 shrink-0" />
+                  <span>{t.insuranceEmergencyLine}:</span>
+                  <span className="font-mono">{insurancePhoneDisplay}</span>
+                </a>
+              ) : (
+                <div
+                  aria-disabled="true"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 font-bold text-xs"
+                >
+                  <PhoneOff className="w-4 h-4 shrink-0" />
+                  <span>{t.noPhoneRegistered}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
 
         {/* Detailed Medical Information Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           {/* Allergies */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none print:border-slate-300 print:break-inside-avoid">
             <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
               {t.allergies}
@@ -485,7 +609,7 @@ function MedicalContent() {
           </div>
 
           {/* Chronic Conditions */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none print:border-slate-300 print:break-inside-avoid">
             <span className="text-[10px] font-bold text-[#001558] uppercase tracking-wider flex items-center gap-1.5">
               <Heart className="w-3.5 h-3.5 text-[#FEB135]" />
               {t.chronicConditions}
@@ -496,7 +620,7 @@ function MedicalContent() {
           </div>
 
           {/* Current Medications */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none print:border-slate-300 print:break-inside-avoid">
             <span className="text-[10px] font-bold text-[#001558] uppercase tracking-wider flex items-center gap-1.5">
               <Pill className="w-3.5 h-3.5 text-indigo-600" />
               {t.currentMedications}
@@ -507,7 +631,7 @@ function MedicalContent() {
           </div>
 
           {/* Dietary Restrictions */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none print:border-slate-300 print:break-inside-avoid">
             <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5 text-emerald-600" />
               {t.dietary}
@@ -518,7 +642,7 @@ function MedicalContent() {
           </div>
 
           {/* Vaccinations */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none print:border-slate-300 print:break-inside-avoid">
             <span className="text-[10px] font-bold text-[#001558] uppercase tracking-wider flex items-center gap-1.5">
               <Syringe className="w-3.5 h-3.5 text-sky-600" />
               {t.vaccinations}
@@ -529,7 +653,7 @@ function MedicalContent() {
           </div>
 
           {/* Surgeries & Trauma */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none print:border-slate-300 print:break-inside-avoid">
             <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5 text-slate-500" />
               {t.surgeries}
@@ -540,7 +664,7 @@ function MedicalContent() {
           </div>
 
           {/* Devices & Implants */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none print:border-slate-300 print:break-inside-avoid">
             <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
               <UserCheck className="w-3.5 h-3.5 text-slate-500" />
               {t.devices}
@@ -551,7 +675,7 @@ function MedicalContent() {
           </div>
 
           {/* Physical Limitations */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1.5 shadow-xs print:shadow-none print:border-slate-300 print:break-inside-avoid">
             <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
               {t.physicalLimits}
@@ -560,19 +684,19 @@ function MedicalContent() {
               {getPhysicalLimits()}
             </p>
           </div>
-        </div>
+        </section>
 
         {/* Legal Consent & Verification Footer */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs shadow-xs print:shadow-none">
+        <footer className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs shadow-xs print:shadow-none print:border-slate-300 print:break-inside-avoid">
           <div className="flex items-center gap-2.5 text-emerald-700">
             <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600" />
             <div>
               <p className="font-bold text-[#001558]">{t.consent}</p>
               <p className="text-[11px] text-slate-600">
-                {t.verified} ({medicalRecord.declaredByName || 'Guardian'} •{' '}
+                {t.verified} ({medicalRecord.declaredByName || t.guardianFallback} •{' '}
                 {medicalRecord.declaredAt
-                  ? new Date(medicalRecord.declaredAt).toLocaleDateString()
-                  : 'Active'}
+                  ? new Date(medicalRecord.declaredAt).toLocaleDateString(dateLocale)
+                  : t.activeStatus}
                 )
               </p>
             </div>
@@ -582,16 +706,16 @@ function MedicalContent() {
             <div className="flex items-center gap-3 shrink-0">
               <div className="p-1 bg-white rounded-lg border border-slate-200">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={qrDataUrl} alt="Emergency QR Code" className="w-16 h-16" />
+                <img src={qrDataUrl} alt={t.qrCodeAlt} className="w-16 h-16" />
               </div>
               <span className="text-[10px] text-slate-500 font-mono">
-                QR Code ID:
+                {t.qrCodeId}:
                 <br />
                 {medicalRecord.qrAccessCode}
               </span>
             </div>
           )}
-        </div>
+        </footer>
       </div>
     </div>
   );
