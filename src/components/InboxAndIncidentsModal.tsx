@@ -310,21 +310,56 @@ export function CrmWorkspace({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [embedded, onClose, showAssociateModal, showNewTicketModal]);
 
-  // Sincronizar correos desde Gmail / Simulación
+  // Sincronizar correos desde Gmail / Simulación (paginado para cubrir toda la bandeja sin timeout)
   const handleSyncInbox = async (mode: 'auto' | 'sample' = 'auto') => {
     if (!activeEvent?.id || !canManageCrm) return;
     setSyncing(true);
     setNotification(null);
     try {
-      const res = await fetch('/api/inbox', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId: activeEvent.id, mode }),
-      });
-      const data = (await res.json()) as { message?: string; error?: string };
-      if (!res.ok) throw new Error(data.error || 'Error al sincronizar');
+      let pageToken: string | null = null;
+      let totalSynced = 0;
+      let totalSkipped = 0;
+      let pages = 0;
+      const MAX_PAGES = 50; // hasta 2.500 correos por clic
+      let lastMessage = 'Inbox sincronizado con éxito.';
 
-      setNotification({ type: 'success', text: data.message || 'Inbox sincronizado con éxito.' });
+      do {
+        const res = await fetch('/api/inbox', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventId: activeEvent.id,
+            mode,
+            ...(pageToken ? { pageToken } : {}),
+          }),
+        });
+        const data = (await res.json()) as {
+          message?: string;
+          error?: string;
+          syncedCount?: number;
+          skippedCount?: number;
+          nextPageToken?: string | null;
+          hasMore?: boolean;
+          accountEmail?: string;
+        };
+        if (!res.ok) throw new Error(data.error || 'Error al sincronizar');
+
+        totalSynced += data.syncedCount ?? 0;
+        totalSkipped += data.skippedCount ?? 0;
+        pageToken = data.hasMore && data.nextPageToken ? data.nextPageToken : null;
+        pages++;
+
+        if (mode === 'sample') {
+          lastMessage = data.message || 'Muestra cargada.';
+          break;
+        }
+
+        const acctLabel = data.accountEmail ? ` (${data.accountEmail})` : '';
+        lastMessage = `Gmail${acctLabel}: ${totalSynced} correos nuevos sincronizados, ${totalSkipped} ya existentes${pageToken ? ' (continuando...)' : ''}.`;
+        setNotification({ type: 'success', text: lastMessage });
+      } while (pageToken && pages < MAX_PAGES);
+
+      setNotification({ type: 'success', text: lastMessage });
       await Promise.all([loadMessages(), loadGoogleStatus()]);
     } catch (err: unknown) {
       setNotification({

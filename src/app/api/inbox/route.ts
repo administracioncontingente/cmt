@@ -144,6 +144,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json().catch(() => ({}))) as {
       eventId?: unknown;
       mode?: unknown;
+      pageToken?: unknown;
     };
     const paramEventId =
       typeof body.eventId === 'string' && body.eventId.trim()
@@ -151,6 +152,10 @@ export async function POST(req: NextRequest) {
         : undefined;
     const requestedMode =
       typeof body.mode === 'string' ? body.mode.trim().toLowerCase() : 'auto';
+    const pageToken =
+      typeof body.pageToken === 'string' && body.pageToken.trim()
+        ? body.pageToken.trim()
+        : null;
 
     const { eventId: activeEventId, forbidden } = await resolveAuthorizedEventId(
       user,
@@ -194,13 +199,19 @@ export async function POST(req: NextRequest) {
     });
 
     if (connectedGoogle) {
-      const result = await syncGoogleInboxForEvent(activeEventId, 25);
+      const result = await syncGoogleInboxForEvent(activeEventId, {
+        maxResults: 50,
+        pageToken,
+      });
       return NextResponse.json({
         mode: 'google',
         accountEmail: result.accountEmail,
-        message: `Gmail (${result.accountEmail}) sincronizado: ${result.syncedCount} correos procesados.`,
+        message: `Gmail (${result.accountEmail}): ${result.syncedCount} correos nuevos, ${result.skippedCount} ya existentes.`,
         syncedCount: result.syncedCount,
-        messages: result.messages,
+        skippedCount: result.skippedCount,
+        totalListed: result.totalListed,
+        nextPageToken: result.nextPageToken,
+        hasMore: result.hasMore,
       });
     }
 

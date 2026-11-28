@@ -325,14 +325,26 @@ function extractGmailBodies(part?: GmailMessagePart): {
   return { text, html, hasAttachments };
 }
 
+export interface SyncGoogleInboxOptions {
+  maxResults?: number;
+  pageToken?: string | null;
+  query?: string;
+}
+
 export async function syncGoogleInboxForEvent(
   eventId: string,
-  maxResults = 25
+  options: SyncGoogleInboxOptions = {}
 ): Promise<{
   accountEmail: string;
   syncedCount: number;
-  messages: Awaited<ReturnType<typeof ingestEmailMessage>>[];
+  skippedCount: number;
+  totalListed: number;
+  nextPageToken: string | null;
+  hasMore: boolean;
 }> {
+  const maxResults = Math.min(Math.max(options.maxResults ?? 50, 1), 100);
+  const query = options.query ?? 'in:inbox -in:spam -in:trash';
+
   const account = await prisma.emailAccount.findFirst({
     where: { eventId, provider: 'GOOGLE' },
     orderBy: { updatedAt: 'desc' },
@@ -354,13 +366,22 @@ export async function syncGoogleInboxForEvent(
       account.id
     );
 
-    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent('-in:spam -in:trash')}`;
+    const listParams = new URLSearchParams({
+      maxResults: String(maxResults),
+      q: query,
+    });
+    if (options.pageToken) {
+      listParams.set('pageToken', options.pageToken);
+    }
+
+    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?${listParams.toString()}`;
     const listRes = await fetch(listUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     const listData = (await listRes.json().catch(() => ({}))) as {
       messages?: Array<{ id: string; threadId: string }>;
+      nextPageToken?: string;
       error?: { message?: string };
     };
 
@@ -372,57 +393,90 @@ export async function syncGoogleInboxForEvent(
     }
 
     const messageRefs = listData.messages || [];
-    const ingested = [];
+    const refIds = messageRefs.map((r) => r.id);
 
-    for (const ref of messageRefs) {
-      const msgRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(ref.id)}?format=full`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+    const existingRows =
+      refIds.length > 0
+        ? await prisma.emailMessage.findMany({
+            where: {
+              eventId,
+              googleMessageId: { in: refIds },
+            },
+            select: { googleMessageId: true },
+          })
+        : [];
+
+    const existingSet = new Set(
+      existingRows
+        .map((r) => r.googleMessageId)
+        .filter((id): id is string => Boolean(id))
+    );
+
+    const missingRefs = messageRefs.filter((r) => !existingSet.has(r.id));
+    const skippedCount = messageRefs.length - missingRefs.length;
+    let syncedCount = 0;
+
+    // Fetch & ingest missing messages in concurrent batches of 10
+    const CONCURRENCY = 10;
+    for (let i = 0; i < missingRefs.length; i += CONCURRENCY) {
+      const batch = missingRefs.slice(i, i + CONCURRENCY);
+      const fetched = await Promise.all(
+        batch.map(async (ref) => {
+          const msgRes = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(ref.id)}?format=full`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          if (!msgRes.ok) return null;
+          return (await msgRes.json()) as GmailMessageResponse;
+        })
       );
-      if (!msgRes.ok) continue;
 
-      const msgData = (await msgRes.json()) as GmailMessageResponse;
-      const headers = msgData.payload?.headers || [];
-      const getHeader = (name: string) =>
-        headers.find((h) => h.name.toLowerCase() === name.toLowerCase())
-          ?.value || '';
+      for (const msgData of fetched) {
+        if (!msgData) continue;
+        const headers = msgData.payload?.headers || [];
+        const getHeader = (name: string) =>
+          headers.find((h) => h.name.toLowerCase() === name.toLowerCase())
+            ?.value || '';
 
-      const fromParsed = parseEmailAddressHeader(getHeader('From'));
-      const toParsed = parseEmailAddressHeader(getHeader('To'));
-      const subject = getHeader('Subject').trim() || '(Sin asunto)';
-      const dateStr = getHeader('Date');
-      const internalMs = msgData.internalDate
-        ? Number(msgData.internalDate)
-        : NaN;
-      const parsedDate =
-        Number.isFinite(internalMs) && internalMs > 0
-          ? new Date(internalMs)
-          : dateStr && !Number.isNaN(new Date(dateStr).getTime())
-            ? new Date(dateStr)
-            : new Date();
+        const fromParsed = parseEmailAddressHeader(getHeader('From'));
+        const toParsed = parseEmailAddressHeader(getHeader('To'));
+        const subject = getHeader('Subject').trim() || '(Sin asunto)';
+        const dateStr = getHeader('Date');
+        const internalMs = msgData.internalDate
+          ? Number(msgData.internalDate)
+          : NaN;
+        const parsedDate =
+          Number.isFinite(internalMs) && internalMs > 0
+            ? new Date(internalMs)
+            : dateStr && !Number.isNaN(new Date(dateStr).getTime())
+              ? new Date(dateStr)
+              : new Date();
 
-      const { text, html, hasAttachments } = extractGmailBodies(
-        msgData.payload
-      );
+        const { text, html, hasAttachments } = extractGmailBodies(
+          msgData.payload
+        );
 
-      const syncedPayload: SyncedMessageData = {
-        googleMessageId: msgData.id,
-        googleThreadId: msgData.threadId,
-        senderEmail: fromParsed.email,
-        senderName: fromParsed.name,
-        recipientEmail: toParsed.email || accountEmail,
-        subject,
-        snippet: msgData.snippet,
-        bodyText: text || msgData.snippet || '',
-        bodyHtml: html || undefined,
-        date: parsedDate,
-        hasAttachments,
-        labels: msgData.labelIds || ['INBOX'],
-      };
+        const syncedPayload: SyncedMessageData = {
+          googleMessageId: msgData.id,
+          googleThreadId: msgData.threadId,
+          senderEmail: fromParsed.email,
+          senderName: fromParsed.name,
+          recipientEmail: toParsed.email || accountEmail,
+          subject,
+          snippet: msgData.snippet,
+          bodyText: text || msgData.snippet || '',
+          bodyHtml: html || undefined,
+          date: parsedDate,
+          hasAttachments,
+          labels: msgData.labelIds || ['INBOX'],
+        };
 
-      const saved = await ingestEmailMessage(eventId, account.id, syncedPayload);
-      ingested.push(saved);
+        await ingestEmailMessage(eventId, account.id, syncedPayload);
+        syncedCount++;
+      }
     }
+
+    const nextPageToken = listData.nextPageToken || null;
 
     await prisma.emailAccount.update({
       where: { id: account.id },
@@ -435,8 +489,11 @@ export async function syncGoogleInboxForEvent(
 
     return {
       accountEmail,
-      syncedCount: ingested.length,
-      messages: ingested,
+      syncedCount,
+      skippedCount,
+      totalListed: messageRefs.length,
+      nextPageToken,
+      hasMore: Boolean(nextPageToken),
     };
   } catch (err: unknown) {
     const errMsg =
