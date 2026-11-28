@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, Settings, Check, Loader2 } from 'lucide-react';
+import { ChevronDown, Settings, Check, Loader2, ExternalLink } from 'lucide-react';
 import { EventManagerModal } from './EventManagerModal';
 import type { EventSummary, UserSessionDTO } from '@/types/domain';
 
@@ -235,8 +236,20 @@ export function EventSelector({ currentUser, onEventChange }: EventSelectorProps
               })}
             </div>
 
-            {/* Footer Action: Settings / Manage Team */}
-            <div className="p-2 bg-[#F5F6F8]">
+            {/* Footer Action: Public Page & Settings / Manage Team */}
+            <div className="p-2 bg-[#F5F6F8] space-y-1.5">
+              {selectedEvent?.code && (
+                <Link
+                  href={`/eventos/${encodeURIComponent(selectedEvent.code)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsOpen(false)}
+                  className="w-full py-2 px-3 rounded-xl bg-[#EEF2FF] hover:bg-[#dce4ff] border border-[#001558]/20 text-[#001558] text-xs font-extrabold transition flex items-center justify-center gap-2"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-[#001558]" />
+                  Ver página pública del evento
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={() => {

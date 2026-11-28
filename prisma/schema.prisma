@@ -33,6 +33,17 @@ model Event {
   accentColor  String?           @default("#FEB135")
   bannerUrl    String?
 
+  // Página Pública Informativa y Documentación Oficial
+  isPublicPagePublished Boolean  @default(true)
+  publicHeadline        String?
+  publicSummary         String?
+  venueDetails          String?
+  registrationInfo      String?
+  contactEmail          String?
+  contactPhone          String?
+  officialWebsiteUrl    String?
+  highlightsJson        String?
+
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
@@ -45,6 +56,7 @@ model Event {
   incidents     Incident[]
   receipts      PaymentReceipt[]
   kitItems      EventKitItem[]
+  documents     EventDocument[]
 }
 
 model EventMembership {
@@ -80,6 +92,7 @@ model User {
   assignedIncidents Incident[]        @relation("AssignedIncidents")
   createdIncidents  Incident[]        @relation("CreatedIncidents")
   incidentComments  IncidentComment[]
+  uploadedDocuments EventDocument[]
 }
 
 // -------------------------------------------------------------
@@ -528,4 +541,37 @@ model ParticipantKitSize {
   @@unique([participantId, kitItemId])
   @@index([participantId])
   @@index([kitItemId])
+}
+
+// -------------------------------------------------------------
+// PÁGINA PÚBLICA DEL EVENTO Y DOCUMENTACIÓN OFICIAL
+// -------------------------------------------------------------
+
+model EventDocument {
+  id            String    @id @default(cuid())
+  eventId       String
+  event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title         String
+  summary       String?
+  category      String    @default("CIRCULAR") // CIRCULAR, INFORMATIVO, FICHA, REGLAMENTO, GUIA, OTRO
+  documentCode  String?
+  audience      String    @default("GENERAL") // GENERAL, PARTICIPANTES, APODERADOS, DIRIGENTES, IST
+  storageType   String    @default("UPLOAD") // UPLOAD, EXTERNAL_LINK
+  externalUrl   String?
+  fileName      String?
+  mimeType      String?
+  sizeBytes     Int?
+  content       Bytes?
+  isPublished   Boolean   @default(true)
+  isPinned      Boolean   @default(false)
+  publishedAt   DateTime? @default(now())
+  downloadCount Int       @default(0)
+  uploadedById  String?
+  uploadedBy    User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([eventId])
+  @@index([eventId, isPublished])
+  @@index([eventId, category])
 }

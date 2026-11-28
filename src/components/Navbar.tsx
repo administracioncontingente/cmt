@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
+  FileText,
   Heart,
   HeartPulse,
   LogOut,
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { href: '/finanzas', label: 'Tesorería', icon: Wallet },
   { href: '/salud', label: 'Salud', icon: HeartPulse },
   { href: '/kit', label: 'Kit & Tallas', icon: Shirt },
+  { href: '/documentos', label: 'Evento & Docs', icon: FileText },
   { href: '/crm', label: 'Inbox & Casos', icon: Mail },
 ] as const;
 

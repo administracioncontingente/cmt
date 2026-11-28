@@ -85,6 +85,7 @@ export async function GET(req: NextRequest) {
         currency: true,
         themeColor: true,
         accentColor: true,
+        isPublicPagePublished: true,
       },
     });
 

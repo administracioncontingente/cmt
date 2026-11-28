@@ -18,6 +18,7 @@ import {
   Globe,
   AlertCircle,
   CreditCard,
+  FileText,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/ToastProvider';
 
@@ -335,10 +336,30 @@ export default function LoginPage() {
                 </div>
 
                 {/* Accesos compactos secundarios */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <Link
+                    href="/eventos"
+                    className="group bg-[#EEF2FF]/60 hover:bg-[#EEF2FF] border border-[#001558]/20 rounded-xl p-3 flex items-center justify-between gap-2 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-[#001558]/15 flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4 text-[#001558]" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-extrabold text-[#001558] truncate">
+                          Eventos y Documentos
+                        </p>
+                        <p className="text-[10px] text-slate-600 truncate">
+                          Información, circulares y fichas
+                        </p>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#001558] shrink-0 transition-colors" />
+                  </Link>
+
                   <Link
                     href="/pagos"
-                    className="group bg-[#F5F6F8] hover:bg-[#EEF2FF] border border-slate-200 hover:border-[#001558]/30 rounded-xl p-3 flex items-center justify-between gap-2.5 transition-colors"
+                    className="group bg-[#F5F6F8] hover:bg-[#EEF2FF] border border-slate-200 hover:border-[#001558]/30 rounded-xl p-3 flex items-center justify-between gap-2 transition-colors"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
@@ -358,7 +379,7 @@ export default function LoginPage() {
 
                   <Link
                     href="/ficha-medica"
-                    className="group bg-[#FFFBF0] hover:bg-[#FFF8E1] border border-[#FEB135]/60 rounded-xl p-3 flex items-center justify-between gap-2.5 transition-colors"
+                    className="group bg-[#FFFBF0] hover:bg-[#FFF8E1] border border-[#FEB135]/60 rounded-xl p-3 flex items-center justify-between gap-2 transition-colors"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-white border border-[#FEB135]/50 flex items-center justify-center shrink-0">

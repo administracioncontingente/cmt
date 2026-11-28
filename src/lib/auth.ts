@@ -159,6 +159,8 @@ export function getEventPermissions(user: UserSession, eventId: string) {
   const canManageMedical = isSuperAdmin || eventRole === 'EVENT_ADMIN' || eventRole === 'MEDICAL_STAFF';
   const canEditParticipants = isSuperAdmin || eventRole === 'EVENT_ADMIN' || eventRole === 'COORDINATOR';
   const canManageCrm = isSuperAdmin || (Boolean(membership) && eventRole !== 'VIEWER');
+  const canManageDocuments = isSuperAdmin || (Boolean(membership) && eventRole !== 'VIEWER');
+  const canManageEventPage = isSuperAdmin || eventRole === 'EVENT_ADMIN' || eventRole === 'COORDINATOR';
   const canDeleteParticipants = isEventAdmin;
   const canView = isSuperAdmin || Boolean(membership);
 
@@ -169,6 +171,8 @@ export function getEventPermissions(user: UserSession, eventId: string) {
     canManageMedical,
     canEditParticipants,
     canManageCrm,
+    canManageDocuments,
+    canManageEventPage,
     canDeleteParticipants,
     canView,
     role: isSuperAdmin ? 'SUPER_ADMIN' : eventRole || 'NONE',

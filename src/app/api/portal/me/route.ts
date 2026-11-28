@@ -118,9 +118,43 @@ export async function GET(req: NextRequest) {
       totalAmount
     );
 
-    const kitItems = participantRecord.eventId
-      ? await ensureDefaultEventKitItems(participantRecord.eventId)
-      : [];
+    const [kitItems, eventDocuments] = participantRecord.eventId
+      ? await Promise.all([
+          ensureDefaultEventKitItems(participantRecord.eventId),
+          prisma.eventDocument.findMany({
+            where: {
+              eventId: participantRecord.eventId,
+              isPublished: true,
+            },
+            orderBy: [
+              { isPinned: 'desc' },
+              { publishedAt: 'desc' },
+              { createdAt: 'desc' },
+            ],
+            select: {
+              id: true,
+              eventId: true,
+              title: true,
+              summary: true,
+              category: true,
+              documentCode: true,
+              audience: true,
+              storageType: true,
+              externalUrl: true,
+              fileName: true,
+              mimeType: true,
+              sizeBytes: true,
+              isPublished: true,
+              isPinned: true,
+              publishedAt: true,
+              downloadCount: true,
+              uploadedById: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          }),
+        ])
+      : [[], []];
 
     const householdParticipants = await prisma.participant.findMany({
       where: {
@@ -178,6 +212,7 @@ export async function GET(req: NextRequest) {
       household,
       kitItems,
       kitSizes: participantRecord.kitSizes,
+      eventDocuments,
       qrEmergencyUrl,
       qrDataUrl,
       sessionEmail: session.email,

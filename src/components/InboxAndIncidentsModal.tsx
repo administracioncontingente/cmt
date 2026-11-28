@@ -119,6 +119,7 @@ export function CrmWorkspace({
 
   // Comment state
   const [newComment, setNewComment] = useState('');
+  const [commentIsPublic, setCommentIsPublic] = useState(false);
   const [submittingComment, setSubmittingComment] = useState(false);
 
   // Manual Association state
@@ -483,7 +484,7 @@ export function CrmWorkspace({
       const res = await fetch(`/api/incidents/${selectedIncident.id}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: newComment, isInternal: true }),
+        body: JSON.stringify({ content: newComment, isInternal: !commentIsPublic }),
       });
       if (res.ok) {
         const data = (await res.json()) as { comment: IncidentCommentDTO };
@@ -492,6 +493,7 @@ export function CrmWorkspace({
           comments: [...(selectedIncident.comments || []), data.comment],
         });
         setNewComment('');
+        setCommentIsPublic(false);
       }
     } finally {
       setSubmittingComment(false);
@@ -1201,26 +1203,53 @@ export function CrmWorkspace({
                       {/* Timeline Comments */}
                       <div className="space-y-2.5">
                         <span className="text-xs font-bold text-[#001558] uppercase tracking-wider block">
-                          Bitácora y Comentarios Internos ({selectedIncident.comments?.length || 0})
+                          Bitácora, Notas y Mensajes ({selectedIncident.comments?.length || 0})
                         </span>
 
                         {!selectedIncident.comments || selectedIncident.comments.length === 0 ? (
                           <p className="text-xs text-slate-500 bg-white border border-slate-200 rounded-xl p-3">
-                            Aún no hay comentarios internos registrados en este caso.
+                            Aún no hay comentarios registrados en este caso.
                           </p>
                         ) : (
-                          selectedIncident.comments.map((c: IncidentCommentDTO) => (
-                            <div
-                              key={c.id}
-                              className="bg-white border border-slate-200 p-3 rounded-xl text-xs space-y-1 shadow-2xs"
-                            >
-                              <div className="flex items-center justify-between text-[11px] text-slate-500">
-                                <strong className="text-[#001558]">{c.authorName}</strong>
-                                <span>{new Date(c.createdAt).toLocaleString('es-CL')}</span>
+                          selectedIncident.comments.map((c: IncidentCommentDTO) => {
+                            const fromParticipant = !c.userId && !c.isInternal;
+                            const isPublicReply = Boolean(c.userId) && !c.isInternal;
+                            return (
+                              <div
+                                key={c.id}
+                                className={`border p-3 rounded-xl text-xs space-y-1 shadow-2xs ${
+                                  fromParticipant
+                                    ? 'bg-[#FFFBF0] border-[#FEB135]/70'
+                                    : isPublicReply
+                                      ? 'bg-[#EEF2FF] border-[#001558]/20'
+                                      : 'bg-white border-slate-200'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                                  <span className="flex items-center gap-1.5 min-w-0">
+                                    <strong className="text-[#001558] truncate">{c.authorName}</strong>
+                                    <span
+                                      className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase border shrink-0 ${
+                                        fromParticipant
+                                          ? 'bg-[#FEB135] text-[#001558] border-[#FEB135]'
+                                          : isPublicReply
+                                            ? 'bg-[#001558] text-white border-[#001558]'
+                                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                                      }`}
+                                    >
+                                      {fromParticipant
+                                        ? 'Participante (Portal)'
+                                        : isPublicReply
+                                          ? 'Respuesta visible'
+                                          : 'Nota interna'}
+                                    </span>
+                                  </span>
+                                  <span className="shrink-0">{new Date(c.createdAt).toLocaleString('es-CL')}</span>
+                                </div>
+                                <p className="text-slate-700 whitespace-pre-wrap">{c.content}</p>
                               </div>
-                              <p className="text-slate-700 whitespace-pre-wrap">{c.content}</p>
-                            </div>
-                          ))
+                            );
+                          })
                         )}
                       </div>
                     </div>
@@ -1229,23 +1258,38 @@ export function CrmWorkspace({
                     {canManageCrm && (
                       <form
                         onSubmit={handleAddComment}
-                        className="p-3 bg-white border-t border-slate-200 flex gap-2"
+                        className="p-3 bg-white border-t border-slate-200 space-y-2"
                       >
-                        <input
-                          type="text"
-                          placeholder="Escribir nota o actualización de la incidencia..."
-                          value={newComment}
-                          onChange={(e) => setNewComment(e.target.value)}
-                          className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:border-[#001558] focus:ring-2 focus:ring-[#FEB135]/50 focus:outline-none"
-                        />
-                        <button
-                          type="submit"
-                          disabled={submittingComment || !newComment.trim()}
-                          className="bg-[#001558] hover:bg-[#0b2370] text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                        >
-                          <Send className="w-3.5 h-3.5 text-[#FEB135]" />
-                          <span>Agregar</span>
-                        </button>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder={
+                              commentIsPublic
+                                ? 'Respuesta que verá el participante en su portal...'
+                                : 'Escribir nota interna del equipo...'
+                            }
+                            value={newComment}
+                            onChange={(e) => setNewComment(e.target.value)}
+                            className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:border-[#001558] focus:ring-2 focus:ring-[#FEB135]/50 focus:outline-none"
+                          />
+                          <button
+                            type="submit"
+                            disabled={submittingComment || !newComment.trim()}
+                            className="bg-[#001558] hover:bg-[#0b2370] text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                          >
+                            <Send className="w-3.5 h-3.5 text-[#FEB135]" />
+                            <span>{commentIsPublic ? 'Responder' : 'Agregar'}</span>
+                          </button>
+                        </div>
+                        <label className="inline-flex items-center gap-2 text-[11px] text-slate-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={commentIsPublic}
+                            onChange={(e) => setCommentIsPublic(e.target.checked)}
+                            className="w-3.5 h-3.5 accent-[#001558]"
+                          />
+                          Visible para el participante en su Portal (si no, queda como nota interna)
+                        </label>
                       </form>
                     )}
                   </div>

@@ -11,6 +11,8 @@ export interface EventPermissions {
   canManageMedical: boolean;
   canEditParticipants: boolean;
   canManageCrm: boolean;
+  canManageDocuments: boolean;
+  canManageEventPage: boolean;
   canDeleteParticipants: boolean;
   canView: boolean;
   role: 'SUPER_ADMIN' | EventRole | 'NONE';
@@ -53,6 +55,15 @@ export interface EventSummary {
   themeColor?: string | null;
   accentColor?: string | null;
   bannerUrl?: string | null;
+  isPublicPagePublished?: boolean;
+  publicHeadline?: string | null;
+  publicSummary?: string | null;
+  venueDetails?: string | null;
+  registrationInfo?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  officialWebsiteUrl?: string | null;
+  highlightsJson?: string | null;
   userRole?: string;
   userTitle?: string;
   isActiveSelection?: boolean;
@@ -60,6 +71,7 @@ export interface EventSummary {
     participants?: number;
     memberships?: number;
     plans?: number;
+    documents?: number;
   };
 }
 
@@ -530,9 +542,149 @@ export interface PortalMeResponseDTO {
   household: PortalHouseholdMemberDTO[];
   kitItems: EventKitItemDTO[];
   kitSizes: ParticipantKitSizeDTO[];
+  eventDocuments?: EventDocumentDTO[];
   qrEmergencyUrl?: string | null;
   qrDataUrl?: string | null;
   sessionEmail: string;
+}
+
+export interface PortalTicketMessageDTO {
+  id: string;
+  authorName: string;
+  content: string;
+  fromParticipant: boolean;
+  createdAt: string | Date;
+}
+
+export interface PortalTicketDTO {
+  id: string;
+  ticketNumber: string;
+  title: string;
+  description: string;
+  category: string;
+  priority: string;
+  status: string;
+  resolutionNotes?: string | null;
+  resolvedAt?: string | Date | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  messages: PortalTicketMessageDTO[];
+}
+
+export type EventDocumentCategory =
+  | 'CIRCULAR'
+  | 'INFORMATIVO'
+  | 'FICHA'
+  | 'REGLAMENTO'
+  | 'GUIA'
+  | 'OTRO';
+
+export type EventDocumentAudience =
+  | 'GENERAL'
+  | 'PARTICIPANTES'
+  | 'APODERADOS'
+  | 'DIRIGENTES'
+  | 'IST';
+
+export type EventDocumentStorageType = 'UPLOAD' | 'EXTERNAL_LINK';
+
+export interface EventHighlightDTO {
+  id: string;
+  title: string;
+  content: string;
+  dateLabel?: string;
+  badge?: string;
+}
+
+export interface EventDocumentDTO {
+  id: string;
+  eventId: string;
+  title: string;
+  summary?: string | null;
+  category: EventDocumentCategory | string;
+  documentCode?: string | null;
+  audience: EventDocumentAudience | string;
+  storageType: EventDocumentStorageType | string;
+  externalUrl?: string | null;
+  fileName?: string | null;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  isPublished: boolean;
+  isPinned: boolean;
+  publishedAt?: string | Date | null;
+  downloadCount: number;
+  uploadedById?: string | null;
+  uploadedBy?: {
+    id: string;
+    name: string;
+    email?: string;
+  } | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface PublicEventListItemDTO extends PublicEventDTO {
+  type?: string;
+  description?: string | null;
+  startDate?: string | Date | null;
+  endDate?: string | Date | null;
+  themeColor?: string | null;
+  accentColor?: string | null;
+  bannerUrl?: string | null;
+  isPublicPagePublished: boolean;
+  publicHeadline?: string | null;
+  publicSummary?: string | null;
+  contactEmail?: string | null;
+  publishedDocumentsCount: number;
+}
+
+export interface PublicEventPlanSummaryDTO {
+  id: string;
+  roleKey: string;
+  name: string;
+  totalAmount: number;
+  currency: string;
+  description?: string | null;
+  installments: Array<{
+    id: string;
+    installmentNumber: number;
+    title: string;
+    dueDate: string | Date;
+    amount: number;
+  }>;
+}
+
+export interface PublicEventPageDTO {
+  published: boolean;
+  isStaffPreview?: boolean;
+  event: {
+    id: string;
+    code: string;
+    name: string;
+    shortName?: string | null;
+    type?: string;
+    description?: string | null;
+    country?: string | null;
+    city?: string | null;
+    flagEmoji?: string | null;
+    startDate?: string | Date | null;
+    endDate?: string | Date | null;
+    currency?: string;
+    themeColor?: string | null;
+    accentColor?: string | null;
+    bannerUrl?: string | null;
+    isPublicPagePublished?: boolean;
+    publicHeadline?: string | null;
+    publicSummary?: string | null;
+    venueDetails?: string | null;
+    registrationInfo?: string | null;
+    contactEmail?: string | null;
+    contactPhone?: string | null;
+    officialWebsiteUrl?: string | null;
+  };
+  highlights?: EventHighlightDTO[];
+  plans?: PublicEventPlanSummaryDTO[];
+  documents?: EventDocumentDTO[];
 }
 
 export interface KitMatrixCellDTO {
