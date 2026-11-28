@@ -1,6 +1,7 @@
 import { formatCurrency } from '@/lib/finance';
 
-export const BULK_EMAIL_BATCH_SIZE = 15;
+export const BULK_EMAIL_BATCH_SIZE = 10;
+export const BULK_EMAIL_SEND_DELAY_MS = 450;
 
 export const BULK_TEMPLATE_VARIABLES = [
   { key: '{{nombre}}', description: 'Primer nombre del participante' },

@@ -267,6 +267,10 @@ export function BulkEmailPanel({
 
         processed += batchIds.length;
         setProgress({ processed, total, sent, failed, errors: [...errors] });
+
+        if (i + BULK_EMAIL_BATCH_SIZE < ids.length) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+        }
       }
 
       if (failed === 0) {
@@ -305,7 +309,7 @@ export function BulkEmailPanel({
                 Remitente activo: {audience.senderEmail}
               </p>
               <p className="text-[11px] text-slate-500">
-                Envío individual por participante en lotes de {BULK_EMAIL_BATCH_SIZE} (límite Google Workspace: hasta 2.000/día).
+                Envío individual en lotes de {BULK_EMAIL_BATCH_SIZE} con control de tasa (~1,5 correos/seg y reintento ante límite 429; límite Google Workspace: 2.000/día).
               </p>
             </div>
           </div>

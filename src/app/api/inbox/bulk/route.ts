@@ -15,6 +15,7 @@ import { buildRoleWhereClause } from '@/lib/roles';
 import { sendEmailViaGoogleWorkspace } from '@/lib/googleWorkspace';
 import {
   BULK_EMAIL_BATCH_SIZE,
+  BULK_EMAIL_SEND_DELAY_MS,
   buildBulkEmailContent,
   isDeliverableEmail,
   type BulkTemplateContext,
@@ -614,6 +615,7 @@ export async function POST(req: NextRequest) {
 
       let delivered = false;
       let errMessage: string | undefined;
+      let rateLimited = false;
 
       if (googleAccount) {
         const gRes = await sendEmailViaGoogleWorkspace({
@@ -626,9 +628,10 @@ export async function POST(req: NextRequest) {
         });
         delivered = gRes.delivered;
         errMessage = gRes.error;
+        rateLimited = Boolean(gRes.rateLimited);
       }
 
-      if (!delivered && resendConfigured) {
+      if (!delivered && resendConfigured && !rateLimited) {
         const rRes = await sendViaResendFallback({
           toEmail: p.email.trim(),
           ccEmail,
@@ -653,9 +656,9 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Respect Gmail API per-second rate limits within batch
+      // Respect Gmail API 250 quota-units/sec sustained limit (100 units per messages.send)
       if (i < participants.length - 1) {
-        await sleep(110);
+        await sleep(rateLimited ? 1500 : BULK_EMAIL_SEND_DELAY_MS);
       }
     }
 

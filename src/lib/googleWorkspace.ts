@@ -513,6 +513,19 @@ function encodeMimeSubject(subject: string): string {
   return `=?UTF-8?B?${Buffer.from(clean, 'utf8').toString('base64')}?=`;
 }
 
+function isGmailRateLimitError(status: number, bodyText: string): boolean {
+  if (status === 429) return true;
+  if (status === 403) {
+    const lower = bodyText.toLowerCase();
+    return (
+      lower.includes('ratelimitexceeded') ||
+      lower.includes('userratelimitexceeded') ||
+      lower.includes('quotaexceeded')
+    );
+  }
+  return false;
+}
+
 export async function sendEmailViaGoogleWorkspace(params: {
   eventId?: string | null;
   toEmail: string;
@@ -520,7 +533,12 @@ export async function sendEmailViaGoogleWorkspace(params: {
   subject: string;
   html: string;
   text: string;
-}): Promise<{ delivered: boolean; fromEmail?: string; error?: string }> {
+}): Promise<{
+  delivered: boolean;
+  fromEmail?: string;
+  error?: string;
+  rateLimited?: boolean;
+}> {
   const account = await prisma.emailAccount.findFirst({
     where: {
       provider: 'GOOGLE',
@@ -589,30 +607,46 @@ export async function sendEmailViaGoogleWorkspace(params: {
       .replace(/\//g, '_')
       .replace(/=+$/, '');
 
-    const res = await fetch(
-      'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ raw: encodedRaw }),
-      }
-    );
+    const maxAttempts = 3;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const res = await fetch(
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ raw: encodedRaw }),
+        }
+      );
 
-    if (res.ok) {
-      return { delivered: true, fromEmail };
+      if (res.ok) {
+        return { delivered: true, fromEmail };
+      }
+
+      const errText = await res.text().catch(() => '');
+      const rateLimited = isGmailRateLimitError(res.status, errText);
+
+      if (rateLimited && attempt < maxAttempts - 1) {
+        const backoffMs = 1500 * (attempt + 1);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+
+      console.error(
+        `[AGSCH Google Mailer] Error enviando correo via Gmail API (HTTP ${res.status}): ${errText.slice(0, 200)}`
+      );
+      return {
+        delivered: false,
+        rateLimited,
+        error: rateLimited
+          ? `Límite de tasa de Gmail alcanzado (HTTP ${res.status})`
+          : `Gmail API HTTP ${res.status}`,
+      };
     }
 
-    const errText = await res.text().catch(() => '');
-    console.error(
-      `[AGSCH Google Mailer] Error enviando correo via Gmail API (HTTP ${res.status}): ${errText.slice(0, 200)}`
-    );
-    return {
-      delivered: false,
-      error: `Gmail API HTTP ${res.status}`,
-    };
+    return { delivered: false, error: 'Error inesperado al enviar con Gmail' };
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : 'Error enviando con Google Workspace';
