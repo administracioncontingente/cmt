@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
       orderBy: [{ createdAt: 'desc' }],
       select: {
         id: true,
+        eventId: true,
         firstName: true,
         lastName: true,
         status: true,
@@ -139,6 +140,7 @@ export async function POST(req: NextRequest) {
       toEmail: normalizedEmail,
       recipientName: `${target.firstName} ${target.lastName}`.trim(),
       eventName: target.event?.name || 'Portal AGSCH',
+      eventId: target.eventId,
       accessUrl,
       expiresMinutes: 15,
     });

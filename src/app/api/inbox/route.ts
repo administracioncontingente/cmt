@@ -7,6 +7,7 @@ import {
   resolveAuthorizedEventId,
 } from '@/lib/auth';
 import { seedSampleInboxMessages } from '@/lib/inboxSync';
+import { syncGoogleInboxForEvent } from '@/lib/googleWorkspace';
 import { apiErrorResponse } from '@/lib/apiUtils';
 
 export async function GET(req: NextRequest) {
@@ -140,11 +141,16 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = (await req.json().catch(() => ({}))) as { eventId?: unknown };
+    const body = (await req.json().catch(() => ({}))) as {
+      eventId?: unknown;
+      mode?: unknown;
+    };
     const paramEventId =
       typeof body.eventId === 'string' && body.eventId.trim()
         ? body.eventId.trim()
         : undefined;
+    const requestedMode =
+      typeof body.mode === 'string' ? body.mode.trim().toLowerCase() : 'auto';
 
     const { eventId: activeEventId, forbidden } = await resolveAuthorizedEventId(
       user,
@@ -172,13 +178,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const synced = await seedSampleInboxMessages(activeEventId);
+    if (requestedMode === 'sample') {
+      const synced = await seedSampleInboxMessages(activeEventId);
+      return NextResponse.json({
+        mode: 'sample',
+        message: `Muestra cargada. ${synced.length} correos de ejemplo procesados.`,
+        syncedCount: synced.length,
+        messages: synced,
+      });
+    }
 
-    return NextResponse.json({
-      message: `Sincronización completada. ${synced.length} correos procesados y asociados.`,
-      syncedCount: synced.length,
-      messages: synced,
+    const connectedGoogle = await prisma.emailAccount.findFirst({
+      where: { eventId: activeEventId, provider: 'GOOGLE' },
+      select: { id: true, email: true },
     });
+
+    if (connectedGoogle) {
+      const result = await syncGoogleInboxForEvent(activeEventId, 25);
+      return NextResponse.json({
+        mode: 'google',
+        accountEmail: result.accountEmail,
+        message: `Gmail (${result.accountEmail}) sincronizado: ${result.syncedCount} correos procesados.`,
+        syncedCount: result.syncedCount,
+        messages: result.messages,
+      });
+    }
+
+    return NextResponse.json(
+      {
+        error:
+          'No hay una cuenta de Google Workspace conectada para este evento. Conéctala en el panel superior o usa "Cargar Muestra".',
+        needsConnection: true,
+      },
+      { status: 400 }
+    );
   } catch (error: unknown) {
     return apiErrorResponse(error, 'Error al sincronizar el inbox');
   }

@@ -1,14 +1,17 @@
+import { sendEmailViaGoogleWorkspace } from '@/lib/googleWorkspace';
+
 export interface SendMagicLinkEmailParams {
   toEmail: string;
   recipientName: string;
   eventName: string;
+  eventId?: string | null;
   accessUrl: string;
   expiresMinutes?: number;
 }
 
 export interface SendMagicLinkEmailResult {
   delivered: boolean;
-  provider: 'resend' | 'console';
+  provider: 'google' | 'resend' | 'console';
 }
 
 function escapeHtml(value: string): string {
@@ -146,6 +149,17 @@ export async function sendMagicLinkEmail(
     '',
     'Si no solicitaste este acceso, puedes ignorar este mensaje.',
   ].join('\n');
+
+  const googleResult = await sendEmailViaGoogleWorkspace({
+    eventId: params.eventId,
+    toEmail: params.toEmail,
+    subject,
+    html,
+    text,
+  });
+  if (googleResult.delivered) {
+    return { delivered: true, provider: 'google' };
+  }
 
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {

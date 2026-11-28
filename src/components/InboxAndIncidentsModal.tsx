@@ -15,6 +15,7 @@ import {
   Send,
   Loader2,
   ArrowRight,
+  Unlink,
 } from 'lucide-react';
 import type {
   EmailMessageDTO,
@@ -57,6 +58,23 @@ interface IncidentMetrics {
   EN_PROCESO: number;
   RESUELTA: number;
   CERRADA: number;
+}
+
+interface GoogleEmailAccountDTO {
+  id: string;
+  email: string;
+  provider: string;
+  syncStatus: string;
+  lastSyncedAt?: string | null;
+  lastError?: string | null;
+}
+
+interface GoogleStatusDTO {
+  configured: boolean;
+  redirectUri: string;
+  accounts: GoogleEmailAccountDTO[];
+  canConnect: boolean;
+  canSync: boolean;
 }
 
 const EMPTY_INBOX_METRICS: InboxMetrics = {
@@ -130,9 +148,26 @@ export function CrmWorkspace({
   const [searchingCandidates, setSearchingCandidates] = useState(false);
 
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [googleStatus, setGoogleStatus] = useState<GoogleStatusDTO | null>(null);
+  const [disconnectingGoogle, setDisconnectingGoogle] = useState(false);
 
   const canManageCrm = !permissions || permissions.canManageCrm;
   const activeEventId = activeEvent?.id;
+
+  const loadGoogleStatus = useCallback(async () => {
+    if (!activeEventId) return;
+    try {
+      const res = await fetch(
+        `/api/integrations/google/status?eventId=${encodeURIComponent(activeEventId)}`
+      );
+      if (res.ok) {
+        const data = (await res.json()) as GoogleStatusDTO;
+        setGoogleStatus(data);
+      }
+    } catch (err) {
+      console.error('Error loading Google Workspace status:', err);
+    }
+  }, [activeEventId]);
 
   const loadMessages = useCallback(async () => {
     if (!activeEventId) return;
@@ -222,6 +257,40 @@ export function CrmWorkspace({
   }, [activeEventId, loadIncidents]);
 
   useEffect(() => {
+    if (!activeEventId) return;
+    let cancelled = false;
+
+    const run = async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+      const params = new URLSearchParams(window.location.search);
+      const connectedEmail = params.get('googleConnected');
+      const googleErr = params.get('googleError');
+      if (connectedEmail) {
+        setNotification({
+          type: 'success',
+          text: `Cuenta Google Workspace conectada: ${connectedEmail}. Ya puedes sincronizar correos y enviar Magic Links desde ella.`,
+        });
+        params.delete('googleConnected');
+        const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+        window.history.replaceState({}, '', nextUrl);
+      } else if (googleErr) {
+        setNotification({ type: 'error', text: googleErr });
+        params.delete('googleError');
+        const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+        window.history.replaceState({}, '', nextUrl);
+      }
+      await loadGoogleStatus();
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeEventId, loadGoogleStatus]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (showAssociateModal) {
@@ -242,7 +311,7 @@ export function CrmWorkspace({
   }, [embedded, onClose, showAssociateModal, showNewTicketModal]);
 
   // Sincronizar correos desde Gmail / Simulación
-  const handleSyncInbox = async () => {
+  const handleSyncInbox = async (mode: 'auto' | 'sample' = 'auto') => {
     if (!activeEvent?.id || !canManageCrm) return;
     setSyncing(true);
     setNotification(null);
@@ -250,13 +319,13 @@ export function CrmWorkspace({
       const res = await fetch('/api/inbox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId: activeEvent.id }),
+        body: JSON.stringify({ eventId: activeEvent.id, mode }),
       });
       const data = (await res.json()) as { message?: string; error?: string };
       if (!res.ok) throw new Error(data.error || 'Error al sincronizar');
 
       setNotification({ type: 'success', text: data.message || 'Inbox sincronizado con éxito.' });
-      await loadMessages();
+      await Promise.all([loadMessages(), loadGoogleStatus()]);
     } catch (err: unknown) {
       setNotification({
         type: 'error',
@@ -264,6 +333,32 @@ export function CrmWorkspace({
       });
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleDisconnectGoogle = async (accountId: string) => {
+    if (!activeEvent?.id) return;
+    setDisconnectingGoogle(true);
+    setNotification(null);
+    try {
+      const res = await fetch(
+        `/api/integrations/google/status?eventId=${encodeURIComponent(activeEvent.id)}&accountId=${encodeURIComponent(accountId)}`,
+        { method: 'DELETE' }
+      );
+      const data = (await res.json()) as { message?: string; error?: string };
+      if (!res.ok) throw new Error(data.error || 'Error al desconectar');
+      setNotification({
+        type: 'success',
+        text: data.message || 'Cuenta de Google Workspace desconectada.',
+      });
+      await loadGoogleStatus();
+    } catch (err: unknown) {
+      setNotification({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Error al desconectar Google Workspace',
+      });
+    } finally {
+      setDisconnectingGoogle(false);
     }
   };
 
@@ -575,17 +670,40 @@ export function CrmWorkspace({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {canManageCrm && (
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {canManageCrm && googleStatus?.accounts && googleStatus.accounts.length > 0 && (
             <button
-              onClick={handleSyncInbox}
+              onClick={() => void handleSyncInbox('auto')}
               disabled={syncing}
               className="px-3.5 py-1.5 rounded-xl bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] text-xs font-black transition flex items-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer"
-              title="Sincronizar correos de Gmail o generar muestra"
+              title="Sincronizar correos reales desde Google Workspace (Gmail)"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Sincronizar Inbox</span>
+              <span className="hidden sm:inline">Sincronizar Gmail</span>
             </button>
+          )}
+
+          {canManageCrm && (!googleStatus?.accounts || googleStatus.accounts.length === 0) && (
+            <>
+              {googleStatus?.configured && activeEvent?.id && googleStatus.canConnect && (
+                <a
+                  href={`/api/integrations/google/connect?eventId=${encodeURIComponent(activeEvent.id)}`}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#FEB135] hover:bg-[#e59c22] text-[#001558] text-xs font-black transition flex items-center gap-1.5 shadow-xs"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Conectar Google Workspace</span>
+                </a>
+              )}
+              <button
+                onClick={() => void handleSyncInbox('sample')}
+                disabled={syncing}
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                title="Cargar 4 correos de muestra para probar el CRM"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Cargar Muestra</span>
+              </button>
+            </>
           )}
 
           {!embedded && onClose && (
@@ -599,6 +717,70 @@ export function CrmWorkspace({
           )}
         </div>
       </div>
+
+      {/* Google Workspace Integration Bar */}
+      {googleStatus && (
+        <div className="px-4 sm:px-6 py-2.5 bg-[#EEF2FF]/70 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+          {googleStatus.accounts.length > 0 ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2 text-[#001558]">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-extrabold text-[11px]">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  Google Workspace conectado: {googleStatus.accounts[0].email}
+                </span>
+                {googleStatus.accounts[0].lastSyncedAt && (
+                  <span className="text-[11px] text-slate-600">
+                    Última sincronización:{' '}
+                    {new Date(googleStatus.accounts[0].lastSyncedAt).toLocaleString('es-CL')}
+                  </span>
+                )}
+                {googleStatus.accounts[0].lastError && (
+                  <span className="text-[11px] text-red-700 font-semibold">
+                    Error: {googleStatus.accounts[0].lastError}
+                  </span>
+                )}
+              </div>
+              {googleStatus.canConnect && (
+                <button
+                  type="button"
+                  disabled={disconnectingGoogle}
+                  onClick={() => void handleDisconnectGoogle(googleStatus.accounts[0].id)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-600 hover:text-red-700 text-[11px] font-bold transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Unlink className="w-3 h-3" />
+                  Desconectar
+                </button>
+              )}
+            </>
+          ) : googleStatus.configured ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 w-full text-slate-700">
+              <span>
+                Conecta la cuenta de <strong>Google Workspace</strong> del evento para recibir correos en este CRM y enviar Magic Links del portal.
+              </span>
+              {googleStatus.canConnect && activeEvent?.id && (
+                <a
+                  href={`/api/integrations/google/connect?eventId=${encodeURIComponent(activeEvent.id)}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#001558] hover:bg-[#0b2370] text-white text-[11px] font-extrabold"
+                >
+                  <Mail className="w-3 h-3 text-[#FEB135]" />
+                  Conectar Cuenta Google
+                </a>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2 w-full text-[11px] text-slate-700">
+              <span>
+                <strong>Google Workspace OAuth pendiente de configurar:</strong> agrega{' '}
+                <code className="px-1 py-0.5 rounded bg-white border border-slate-200 font-mono text-[#001558]">GOOGLE_CLIENT_ID</code> y{' '}
+                <code className="px-1 py-0.5 rounded bg-white border border-slate-200 font-mono text-[#001558]">GOOGLE_CLIENT_SECRET</code> en Vercel / <code className="font-mono">.env</code> con Redirect URI:{' '}
+                <code className="px-1.5 py-0.5 rounded bg-white border border-slate-200 font-mono text-[#001558] select-all">
+                  {googleStatus.redirectUri}
+                </code>
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
         {/* Tab Navigation */}
         <div className="flex items-center justify-between px-4 sm:px-6 bg-[#F5F6F8] border-b border-slate-200 overflow-x-auto">
@@ -755,10 +937,18 @@ export function CrmWorkspace({
                       <p>No se encontraron correos con los filtros actuales.</p>
                       {canManageCrm && (
                         <button
-                          onClick={handleSyncInbox}
+                          onClick={() =>
+                            void handleSyncInbox(
+                              googleStatus?.accounts && googleStatus.accounts.length > 0
+                                ? 'auto'
+                                : 'sample'
+                            )
+                          }
                           className="px-4 py-2 rounded-xl bg-[#001558] hover:bg-[#0b2370] text-white font-bold text-xs cursor-pointer transition-colors"
                         >
-                          Sincronizar Correos de Muestra
+                          {googleStatus?.accounts && googleStatus.accounts.length > 0
+                            ? 'Sincronizar Gmail'
+                            : 'Cargar Correos de Muestra'}
                         </button>
                       )}
                     </div>
