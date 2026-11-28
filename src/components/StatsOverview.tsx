@@ -199,7 +199,12 @@ export function StatsOverview({
             <span className="text-3xl font-extrabold text-[#001558]">
               {stats.totalParticipants.toLocaleString('es-CL')}
             </span>
-            <span className="text-xs text-slate-500 font-medium">activos</span>
+            <span
+              className="text-xs text-slate-500 font-medium"
+              title="Participantes inscritos confirmados (INSCRITO = SI)"
+            >
+              activos
+            </span>
             {stats.countBaja > 0 &&
               (isInteractive ? (
                 <button

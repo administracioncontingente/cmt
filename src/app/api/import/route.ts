@@ -214,13 +214,13 @@ export async function POST(req: NextRequest) {
       // Normalizar Rol
       const roleKey = normalizeRoleKey(mapped.contingentRole);
 
-      // Normalizar Estado
+      // Normalizar Estado (soporta también columna INSCRITO = SI / NO)
       let statusKey = 'PRE_INSCRITO';
       if (mapped.status) {
-        const s = mapped.status.toUpperCase();
-        if (s.includes('CONFIRM')) statusKey = 'CONFIRMADO';
+        const s = mapped.status.trim().toUpperCase();
+        if (s === 'SI' || s === 'SÍ' || s.includes('CONFIRM')) statusKey = 'CONFIRMADO';
         else if (s.includes('ESPERA')) statusKey = 'LISTA_ESPERA';
-        else if (s.includes('RETIR')) statusKey = 'RETIRADO';
+        else if (s.includes('RETIR') || s.includes('BAJA')) statusKey = 'RETIRADO';
         else statusKey = 'PRE_INSCRITO';
       }
 

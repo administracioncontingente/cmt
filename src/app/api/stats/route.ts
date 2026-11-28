@@ -172,15 +172,16 @@ export async function GET(req: NextRequest) {
         return;
       }
 
-      activeParticipantsCount++;
-
-      // Role categorizing (solo activos)
-      const roleKey = normalizeRoleKey(p.contingentRole);
-      roleCounts[roleKey] = (roleCounts[roleKey] || 0) + 1;
-
-      // Status categorizing (solo activos)
+      // Status categorizing (todos los no-baja)
       if (p.status in statusCounts) {
         statusCounts[p.status]++;
+      }
+
+      // Total Contingente (activos) = solo participantes inscritos confirmados (INSCRITO = SI -> CONFIRMADO)
+      if (p.status === 'CONFIRMADO') {
+        activeParticipantsCount++;
+        const roleKey = normalizeRoleKey(p.contingentRole);
+        roleCounts[roleKey] = (roleCounts[roleKey] || 0) + 1;
       }
 
       // Financial status from sheet / database
