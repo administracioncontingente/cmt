@@ -294,7 +294,7 @@ export function StatsOverview({
             </div>
             {(stats.bajaCollectedUSD ?? 0) > 0 && (
               <p className="text-[10px] text-slate-500 pt-0.5">
-                Saldo neto en bajas: {formatCurrency(stats.bajaCollectedUSD ?? 0, currency)}
+                Incluye en bajas: {formatCurrency(stats.bajaCollectedUSD ?? 0, currency)}
               </p>
             )}
           </div>

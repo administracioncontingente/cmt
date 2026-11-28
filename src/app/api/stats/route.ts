@@ -169,6 +169,10 @@ export async function GET(req: NextRequest) {
         countBaja++;
         statusCounts.RETIRADO++;
         bajaCollectedUSD += realPaid;
+        totalCollectedUSD += realPaid;
+        if (p.targetFeeUSD !== null && p.targetFeeUSD !== undefined) {
+          totalProjectedUSD += p.targetFeeUSD;
+        }
         return;
       }
 
