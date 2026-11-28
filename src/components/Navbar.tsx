@@ -30,7 +30,7 @@ const NAV_ITEMS = [
   { href: '/salud', label: 'Salud', icon: HeartPulse },
   { href: '/kit', label: 'Kit & Tallas', icon: Shirt },
   { href: '/documentos', label: 'Evento & Docs', icon: FileText },
-  { href: '/crm', label: 'Inbox & Casos', icon: Mail },
+  { href: '/crm', label: 'CRM & Casos', icon: Mail },
 ] as const;
 
 export function Navbar({ user, onEventChange }: NavbarProps) {
@@ -57,58 +57,21 @@ export function Navbar({ user, onEventChange }: NavbarProps) {
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-slate-200 border-t-4 border-t-[#001558] shadow-xs print:hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-3">
-          {/* Brand Logo & Primary Multi-Route Navigation */}
-          <div className="flex items-center gap-3 lg:gap-5 min-w-0">
-            <Link
-              href="/"
-              className="relative w-28 sm:w-36 lg:w-44 h-9 sm:h-11 shrink-0 block"
-              aria-label="Ir al inicio - Contingente AGSCH"
-            >
-              <Image
-                src="/agsch-logo-color.svg"
-                alt="Guías y Scouts de Chile"
-                fill
-                priority
-                className="object-contain object-left"
-              />
-            </Link>
-
-            {user && (
-              <nav
-                aria-label="Navegación principal"
-                className="hidden md:flex items-center gap-1 lg:gap-1.5"
-              >
-                {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-                  const active = isRouteActive(href);
-                  return (
-                    <Link
-                      key={href}
-                      href={href}
-                      className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap transition-colors shrink-0 ${
-                        active
-                          ? 'bg-[#EEF2FF] text-[#001558] border-[#001558]/25 shadow-xs'
-                          : 'bg-transparent text-slate-600 border-transparent hover:text-[#001558] hover:bg-[#F5F6F8]'
-                      }`}
-                    >
-                      <Icon
-                        className={`w-3.5 h-3.5 shrink-0 ${
-                          active ? 'text-[#FEB135]' : 'text-slate-400'
-                        }`}
-                      />
-                      <span>{label}</span>
-                      {active && (
-                        <span
-                          aria-hidden="true"
-                          className="absolute inset-x-2.5 -bottom-[1px] h-0.5 rounded-full bg-[#FEB135]"
-                        />
-                      )}
-                    </Link>
-                  );
-                })}
-              </nav>
-            )}
-          </div>
+        <div className="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-3">
+          {/* Brand Logo */}
+          <Link
+            href="/"
+            className="relative w-28 sm:w-36 lg:w-40 h-9 sm:h-10 shrink-0 block"
+            aria-label="Ir al inicio - Contingente AGSCH"
+          >
+            <Image
+              src="/agsch-logo-color.svg"
+              alt="Guías y Scouts de Chile"
+              fill
+              priority
+              className="object-contain object-left"
+            />
+          </Link>
 
           {/* Right Section: Event Selector, Medical Portal & User Account */}
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
@@ -163,23 +126,23 @@ export function Navbar({ user, onEventChange }: NavbarProps) {
         </div>
       </div>
 
-      {/* Mobile Secondary Navigation Bar */}
+      {/* Dedicated Full-Width Navigation Bar (prevents overlap with EventSelector at any viewport width) */}
       {user && (
         <nav
-          aria-label="Navegación móvil"
-          className="md:hidden border-t border-slate-100 bg-[#F5F6F8]/80 px-4 py-2 overflow-x-auto"
+          aria-label="Navegación principal"
+          className="border-t border-slate-100 bg-[#F8FAFC] overflow-x-auto"
         >
-          <div className="flex items-center gap-1.5 min-w-max">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5 flex items-center gap-1.5 min-w-max">
             {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
               const active = isRouteActive(href);
               return (
                 <Link
                   key={href}
                   href={href}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap transition-colors ${
+                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold whitespace-nowrap transition-colors shrink-0 ${
                     active
-                      ? 'bg-[#EEF2FF] text-[#001558] border-[#FEB135] shadow-xs'
-                      : 'bg-white text-slate-600 border-slate-200 hover:text-[#001558]'
+                      ? 'bg-[#EEF2FF] text-[#001558] border-[#001558]/25 shadow-xs'
+                      : 'bg-white md:bg-transparent text-slate-600 border-slate-200 md:border-transparent hover:text-[#001558] hover:bg-white'
                   }`}
                 >
                   <Icon
@@ -188,6 +151,12 @@ export function Navbar({ user, onEventChange }: NavbarProps) {
                     }`}
                   />
                   <span>{label}</span>
+                  {active && (
+                    <span
+                      aria-hidden="true"
+                      className="hidden md:block absolute inset-x-3 -bottom-[1px] h-0.5 rounded-full bg-[#FEB135]"
+                    />
+                  )}
                 </Link>
               );
             })}
