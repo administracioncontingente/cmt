@@ -17,6 +17,7 @@ import {
   ArrowRight,
   Unlink,
 } from 'lucide-react';
+import { BulkEmailPanel } from '@/components/BulkEmailPanel';
 import type {
   EmailMessageDTO,
   IncidentDTO,
@@ -100,7 +101,7 @@ export function CrmWorkspace({
   embedded = false,
   onClose,
 }: CrmWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<'inbox' | 'incidents'>('inbox');
+  const [activeTab, setActiveTab] = useState<'inbox' | 'incidents' | 'bulk'>('inbox');
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
@@ -849,6 +850,18 @@ export function CrmWorkspace({
               <Ticket className="w-4 h-4" />
               Incidencias & Casos CRM ({incidents.length})
             </button>
+
+            <button
+              onClick={() => setActiveTab('bulk')}
+              className={`flex items-center gap-2 px-4 sm:px-5 py-3 text-xs font-bold uppercase tracking-wider transition border-b-2 whitespace-nowrap cursor-pointer ${
+                activeTab === 'bulk'
+                  ? 'border-[#001558] text-[#001558] bg-white'
+                  : 'border-transparent text-slate-600 hover:text-[#001558]'
+              }`}
+            >
+              <Send className="w-4 h-4 text-[#FEB135]" />
+              Envío Masivo
+            </button>
           </div>
 
           {activeTab === 'incidents' && canManageCrm && (
@@ -1528,6 +1541,14 @@ export function CrmWorkspace({
                 )}
               </div>
             </>
+          )}
+
+          {activeTab === 'bulk' && (
+            <BulkEmailPanel
+              eventId={activeEvent?.id}
+              userEmail={currentUser?.email}
+              canManageCrm={canManageCrm}
+            />
           )}
         </div>
       </div>

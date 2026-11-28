@@ -516,10 +516,11 @@ function encodeMimeSubject(subject: string): string {
 export async function sendEmailViaGoogleWorkspace(params: {
   eventId?: string | null;
   toEmail: string;
+  ccEmail?: string | null;
   subject: string;
   html: string;
   text: string;
-}): Promise<{ delivered: boolean; fromEmail?: string }> {
+}): Promise<{ delivered: boolean; fromEmail?: string; error?: string }> {
   const account = await prisma.emailAccount.findFirst({
     where: {
       provider: 'GOOGLE',
@@ -542,7 +543,7 @@ export async function sendEmailViaGoogleWorkspace(params: {
     }));
 
   if (!fallbackAccount) {
-    return { delivered: false };
+    return { delivered: false, error: 'NO_GOOGLE_ACCOUNT' };
   }
 
   try {
@@ -552,13 +553,21 @@ export async function sendEmailViaGoogleWorkspace(params: {
 
     const boundary = `agsch_${crypto.randomBytes(12).toString('hex')}`;
     const safeTo = params.toEmail.replace(/[\r\n]+/g, '').trim();
+    const safeCc = params.ccEmail?.replace(/[\r\n]+/g, '').trim();
 
-    const rawMime = [
+    const headers = [
       `From: AGSCH Eventos <${fromEmail}>`,
       `To: ${safeTo}`,
+      ...(safeCc && safeCc.toLowerCase() !== safeTo.toLowerCase()
+        ? [`Cc: ${safeCc}`]
+        : []),
       `Subject: ${encodeMimeSubject(params.subject)}`,
       'MIME-Version: 1.0',
       `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    ];
+
+    const rawMime = [
+      ...headers,
       '',
       `--${boundary}`,
       'Content-Type: text/plain; charset="UTF-8"',
@@ -600,11 +609,14 @@ export async function sendEmailViaGoogleWorkspace(params: {
     console.error(
       `[AGSCH Google Mailer] Error enviando correo via Gmail API (HTTP ${res.status}): ${errText.slice(0, 200)}`
     );
-    return { delivered: false };
+    return {
+      delivered: false,
+      error: `Gmail API HTTP ${res.status}`,
+    };
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : 'Error enviando con Google Workspace';
     console.error(`[AGSCH Google Mailer] Excepción: ${message}`);
-    return { delivered: false };
+    return { delivered: false, error: message };
   }
 }
