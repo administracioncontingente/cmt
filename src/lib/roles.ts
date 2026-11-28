@@ -8,8 +8,6 @@ export type RoleKey = 'JOVEN' | 'DIRIGENTE' | 'IST' | 'CMT';
 export function normalizeRoleKey(rawRole?: string | null): RoleKey {
   const r = (rawRole || '').trim().toUpperCase();
   if (!r) return 'JOVEN';
-  // Patrol leaders are youth participants, so check PATRULLA before RESPONSABLE
-  if (r.includes('PATRULLA')) return 'JOVEN';
   if (
     r.includes('RESPONSABLE') ||
     r.includes('DIRIGENTE') ||
@@ -36,12 +34,14 @@ export function buildRoleWhereClause(role: string): Prisma.ParticipantWhereInput
 
   if (normalized === 'JOVEN') {
     return {
-      contingentRole: { in: ['Participante', 'Responsable de Patrulla', 'JOVEN'] },
+      contingentRole: { in: ['Participante', 'PARTICIPANTE', 'JOVEN'] },
     };
   }
   if (normalized === 'DIRIGENTE') {
     return {
-      contingentRole: { in: ['RESPONSABLE', 'DIRIGENTE', 'Educador'] },
+      contingentRole: {
+        in: ['RESPONSABLE', 'Responsable de Patrulla', 'DIRIGENTE', 'Educador'],
+      },
     };
   }
   if (normalized === 'IST') {
@@ -59,15 +59,9 @@ export function buildRoleWhereClause(role: string): Prisma.ParticipantWhereInput
  */
 export function getRoleBadgeInfo(role?: string | null): { label: string; className: string } {
   const r = (role || '').toUpperCase();
-  if (r.includes('PATRULLA')) {
-    return {
-      label: 'Resp. Patrulla',
-      className: 'bg-sky-50 text-sky-800 border-sky-200',
-    };
-  }
   if (r.includes('RESPONSABLE') || r.includes('DIRIGENTE') || r.includes('EDUCADOR')) {
     return {
-      label: 'Educador / Dirigente',
+      label: r.includes('PATRULLA') ? 'Resp. Patrulla' : 'Educador / Dirigente',
       className: 'bg-[#FFF8E1] text-[#001558] border-[#FEB135]',
     };
   }
